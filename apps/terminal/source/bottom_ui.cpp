@@ -1,21 +1,21 @@
 #include <3ds.h>
 #include "bottom_ui.hpp"
 
-#include <stddef.h>
+#include <cstdio>
+#include <cstring>
 
 namespace {
 
-constexpr int LOGICAL_WIDTH  = 320;
-constexpr int LOGICAL_HEIGHT = 240;
-constexpr int FB_STRIDE      = 240;
+constexpr int WIDTH = 320;
+constexpr int HEIGHT = 240;
+constexpr int STRIDE = 240;
+constexpr int PIXELS = WIDTH * HEIGHT;
+
+static u16 g_backbuffer[PIXELS];
 
 static inline u16 gray(u8 value)
 {
-    return RGB8_to_565(
-        value,
-        value,
-        value
-    );
+    return RGB8_to_565(value, value, value);
 }
 
 static inline u16 *framebuffer()
@@ -30,18 +30,11 @@ static inline u16 *framebuffer()
     );
 }
 
-static inline size_t pixelIndex(
-    int x,
-    int y
-)
+static inline size_t pixelIndex(int x, int y)
 {
-    // 3DS framebuffers are stored sideways.
     return
-        static_cast<size_t>(x) *
-        FB_STRIDE +
-        static_cast<size_t>(
-            FB_STRIDE - 1 - y
-        );
+        static_cast<size_t>(x) * STRIDE +
+        static_cast<size_t>(STRIDE - 1 - y);
 }
 
 static inline void putPixel(
@@ -51,123 +44,235 @@ static inline void putPixel(
 )
 {
     if (
-        x < 0 ||
-        x >= LOGICAL_WIDTH ||
-        y < 0 ||
-        y >= LOGICAL_HEIGHT
+        x < 0 || x >= WIDTH ||
+        y < 0 || y >= HEIGHT
     ) {
         return;
     }
 
-    framebuffer()[
-        pixelIndex(x, y)
-    ] = color;
+    g_backbuffer[pixelIndex(x, y)] = color;
 }
 
-static void fillScreen(
+static void fillScreen(u16 color)
+{
+    for (int i = 0; i < PIXELS; ++i) {
+        g_backbuffer[i] = color;
+    }
+}
+
+static void fillRect(
+    int x,
+    int y,
+    int w,
+    int h,
     u16 color
 )
 {
-    u16 *fb = framebuffer();
-
-    for (
-        int x = 0;
-        x < LOGICAL_WIDTH;
-        ++x
-    ) {
-        for (
-            int y = 0;
-            y < LOGICAL_HEIGHT;
-            ++y
-        ) {
-            fb[
-                pixelIndex(x, y)
-            ] = color;
+    for (int py = y; py < y + h; ++py) {
+        for (int px = x; px < x + w; ++px) {
+            putPixel(px, py, color);
         }
     }
 }
 
-static void horizontalLine(
+static void drawHLine(
     int x,
     int y,
-    int width,
+    int length,
     u16 color
 )
 {
-    for (
-        int px = x;
-        px < x + width;
-        ++px
-    ) {
-        putPixel(
-            px,
-            y,
-            color
-        );
+    for (int px = x; px < x + length; ++px) {
+        putPixel(px, y, color);
     }
 }
 
-static void verticalLine(
+static void drawVLine(
     int x,
     int y,
-    int height,
+    int length,
     u16 color
 )
 {
-    for (
-        int py = y;
-        py < y + height;
-        ++py
-    ) {
-        putPixel(
-            x,
-            py,
-            color
-        );
+    for (int py = y; py < y + length; ++py) {
+        putPixel(x, py, color);
     }
 }
 
-static void rectangle(
+static void drawRect(
     int x,
     int y,
-    int width,
-    int height,
+    int w,
+    int h,
     u16 color
 )
 {
-    if (
-        width <= 0 ||
-        height <= 0
-    ) {
+    drawHLine(x, y, w, color);
+    drawHLine(x, y + h - 1, w, color);
+    drawVLine(x, y, h, color);
+    drawVLine(x + w - 1, y, h, color);
+}
+
+// Original DSi 5x7 glyph set used by INFINIT3 Terminal.
+static const u8 FONT_A[7] = {14,17,17,31,17,17,17};
+static const u8 FONT_D[7] = {30,17,17,17,17,17,30};
+static const u8 FONT_E[7] = {31,16,16,30,16,16,31};
+static const u8 FONT_F[7] = {31,16,16,30,16,16,16};
+static const u8 FONT_G[7] = {14,17,16,23,17,17,14};
+static const u8 FONT_H[7] = {17,17,17,31,17,17,17};
+static const u8 FONT_I[7] = {14,4,4,4,4,4,14};
+static const u8 FONT_L[7] = {16,16,16,16,16,16,31};
+static const u8 FONT_M[7] = {17,27,21,21,17,17,17};
+static const u8 FONT_N[7] = {17,25,21,19,17,17,17};
+static const u8 FONT_O[7] = {14,17,17,17,17,17,14};
+static const u8 FONT_R[7] = {30,17,17,30,20,18,17};
+static const u8 FONT_S[7] = {15,16,16,14,1,1,30};
+static const u8 FONT_T[7] = {31,4,4,4,4,4,4};
+static const u8 FONT_U[7] = {17,17,17,17,17,17,14};
+static const u8 FONT_V[7] = {17,17,17,17,17,10,4};
+
+static const u8 FONT_0[7] = {14,17,19,21,25,17,14};
+static const u8 FONT_1[7] = {4,12,4,4,4,4,14};
+static const u8 FONT_2[7] = {14,17,1,2,4,8,31};
+static const u8 FONT_3[7] = {30,1,1,14,1,1,30};
+static const u8 FONT_4[7] = {2,6,10,18,31,2,2};
+static const u8 FONT_5[7] = {31,16,16,30,1,1,30};
+static const u8 FONT_6[7] = {14,16,16,30,17,17,14};
+static const u8 FONT_7[7] = {31,1,2,4,8,8,8};
+static const u8 FONT_8[7] = {14,17,17,14,17,17,14};
+static const u8 FONT_9[7] = {14,17,17,15,1,1,14};
+
+static const u8 FONT_DASH[7] = {0,0,0,31,0,0,0};
+static const u8 FONT_DOT[7] = {0,0,0,0,0,6,6};
+
+static const u8 *getGlyph(char c)
+{
+    switch (c) {
+        case 'A': return FONT_A;
+        case 'D': return FONT_D;
+        case 'E': return FONT_E;
+        case 'F': return FONT_F;
+        case 'G': return FONT_G;
+        case 'H': return FONT_H;
+        case 'I': return FONT_I;
+        case 'L': return FONT_L;
+        case 'M': return FONT_M;
+        case 'N': return FONT_N;
+        case 'O': return FONT_O;
+        case 'R': return FONT_R;
+        case 'S': return FONT_S;
+        case 'T': return FONT_T;
+        case 'U': return FONT_U;
+        case 'V': return FONT_V;
+
+        case '0': return FONT_0;
+        case '1': return FONT_1;
+        case '2': return FONT_2;
+        case '3': return FONT_3;
+        case '4': return FONT_4;
+        case '5': return FONT_5;
+        case '6': return FONT_6;
+        case '7': return FONT_7;
+        case '8': return FONT_8;
+        case '9': return FONT_9;
+
+        case '-': return FONT_DASH;
+        case '.': return FONT_DOT;
+        default: return nullptr;
+    }
+}
+
+static void drawGlyph(
+    int x,
+    int y,
+    const u8 *glyph,
+    int scale,
+    u16 color
+)
+{
+    if (!glyph) {
         return;
     }
 
-    horizontalLine(
-        x,
-        y,
-        width,
-        color
-    );
+    for (int row = 0; row < 7; ++row) {
+        for (int col = 0; col < 5; ++col) {
+            if (glyph[row] & (1 << (4 - col))) {
+                fillRect(
+                    x + col * scale,
+                    y + row * scale,
+                    scale,
+                    scale,
+                    color
+                );
+            }
+        }
+    }
+}
 
-    horizontalLine(
-        x,
-        y + height - 1,
-        width,
-        color
-    );
+static void drawText(
+    int x,
+    int y,
+    const char *text,
+    int scale,
+    u16 color
+)
+{
+    int cursorX = x;
 
-    verticalLine(
-        x,
-        y,
-        height,
-        color
-    );
+    while (*text) {
+        if (*text == ' ') {
+            cursorX += 4 * scale;
+        } else {
+            drawGlyph(
+                cursorX,
+                y,
+                getGlyph(*text),
+                scale,
+                color
+            );
+            cursorX += 6 * scale;
+        }
 
-    verticalLine(
-        x + width - 1,
-        y,
-        height,
-        color
+        ++text;
+    }
+}
+
+static int sx(int value)
+{
+    return (value * 5 + 2) / 4;
+}
+
+static int sy(int value)
+{
+    return (value * 5 + 2) / 4;
+}
+
+static void present()
+{
+    std::memcpy(
+        framebuffer(),
+        g_backbuffer,
+        sizeof(g_backbuffer)
+    );
+}
+
+static void formatPrice(
+    char *out,
+    size_t outSize,
+    bool ready,
+    double value
+)
+{
+    if (!ready) {
+        std::snprintf(out, outSize, "----");
+        return;
+    }
+
+    std::snprintf(
+        out,
+        outSize,
+        "%.2f",
+        value
     );
 }
 
@@ -175,8 +280,6 @@ static void rectangle(
 
 bool t6aBottomInit()
 {
-    // consoleInit(GFX_BOTTOM) establishes RGB565.
-    // Keep this screen single-buffered and persistent.
     gfxSetDoubleBuffering(
         GFX_BOTTOM,
         false
@@ -188,84 +291,231 @@ bool t6aBottomInit()
         ) == GSP_RGB565_OES;
 }
 
-void t6aBottomDrawFoundation()
+void t6bBottomRender(
+    const T6bBottomModel &model
+)
 {
-    const u16 black =
-        gray(0);
+    const u16 background = gray(24);
+    const u16 normal = gray(49);
+    const u16 selected = gray(99);
+    const u16 white = gray(255);
 
-    const u16 dim =
-        gray(75);
+    fillScreen(background);
 
-    const u16 medium =
-        gray(125);
+    const u16 nasColor =
+        model.market == 0 ? selected : normal;
+    const u16 us30Color =
+        model.market == 1 ? selected : normal;
+    const u16 goldColor =
+        model.market == 2 ? selected : normal;
 
-    const u16 bright =
-        gray(210);
+    const u16 fifteenColor =
+        model.timeframe == 0 ? selected : normal;
+    const u16 thirtyColor =
+        model.timeframe == 1 ? selected : normal;
+    const u16 oneHourColor =
+        model.timeframe == 2 ? selected : normal;
 
-    fillScreen(
-        black
+    // Original DSi layout scaled 5/4 from 256x192 to 320x240.
+    drawText(
+        sx(77), sy(8),
+        "INFINIT3 TERMINAL",
+        1,
+        white
     );
 
-    // Outer terminal frame.
-    rectangle(
-        3,
-        3,
-        314,
-        234,
-        medium
+    drawHLine(
+        sx(63), sy(23),
+        sx(130),
+        white
     );
 
-    // Header.
-    rectangle(
-        7,
-        7,
-        306,
-        22,
-        bright
+    drawVLine(
+        sx(86), sy(39),
+        sy(126),
+        white
     );
 
-    // Selection region.
-    rectangle(
-        7,
-        31,
-        306,
-        30,
-        medium
+    drawVLine(
+        sx(196), sy(39),
+        sy(126),
+        white
     );
 
-    // Candle inspection region.
-    rectangle(
-        7,
-        63,
-        306,
-        54,
-        dim
+    fillRect(
+        sx(4), sy(45),
+        sx(77), sy(30),
+        nasColor
     );
 
-    // Big-3 / macro region.
-    rectangle(
-        7,
-        119,
-        306,
-        58,
-        dim
+    fillRect(
+        sx(4), sy(87),
+        sx(77), sy(30),
+        us30Color
     );
 
-    // Status region.
-    rectangle(
-        7,
-        179,
-        306,
-        32,
-        dim
+    fillRect(
+        sx(4), sy(129),
+        sx(77), sy(30),
+        goldColor
     );
 
-    // Controls region.
-    rectangle(
-        7,
-        213,
-        306,
-        20,
-        medium
+    fillRect(
+        sx(201), sy(45),
+        sx(51), sy(30),
+        fifteenColor
     );
+
+    fillRect(
+        sx(201), sy(87),
+        sx(51), sy(30),
+        thirtyColor
+    );
+
+    fillRect(
+        sx(201), sy(129),
+        sx(51), sy(30),
+        oneHourColor
+    );
+
+    drawText(
+        sx(10), sy(56),
+        "NAS100",
+        1,
+        white
+    );
+
+    drawText(
+        sx(20), sy(98),
+        "US30",
+        1,
+        white
+    );
+
+    drawText(
+        sx(20), sy(140),
+        "GOLD",
+        1,
+        white
+    );
+
+    char nasPrice[24];
+    char us30Price[24];
+    char goldPrice[24];
+
+    formatPrice(
+        nasPrice,
+        sizeof(nasPrice),
+        model.dataConnected,
+        model.nas100
+    );
+
+    formatPrice(
+        us30Price,
+        sizeof(us30Price),
+        model.dataConnected,
+        model.us30
+    );
+
+    formatPrice(
+        goldPrice,
+        sizeof(goldPrice),
+        model.dataConnected,
+        model.gold
+    );
+
+    drawText(
+        sx(105), sy(56),
+        nasPrice,
+        1,
+        white
+    );
+
+    drawText(
+        sx(105), sy(98),
+        us30Price,
+        1,
+        white
+    );
+
+    drawText(
+        sx(105), sy(140),
+        goldPrice,
+        1,
+        white
+    );
+
+    drawText(
+        sx(217), sy(56),
+        "15M",
+        1,
+        white
+    );
+
+    drawText(
+        sx(217), sy(98),
+        "30M",
+        1,
+        white
+    );
+
+    drawText(
+        sx(220), sy(140),
+        "1H",
+        1,
+        white
+    );
+
+    fillRect(
+        sx(8), sy(169),
+        sx(64), sy(18),
+        normal
+    );
+    drawRect(
+        sx(8), sy(169),
+        sx(64), sy(18),
+        white
+    );
+    drawText(
+        sx(27), sy(175),
+        "ALERT",
+        1,
+        white
+    );
+
+    fillRect(
+        sx(96), sy(169),
+        sx(64), sy(18),
+        normal
+    );
+    drawRect(
+        sx(96), sy(169),
+        sx(64), sy(18),
+        white
+    );
+    drawText(
+        sx(107), sy(175),
+        "REFRESH",
+        1,
+        white
+    );
+
+    fillRect(
+        sx(184), sy(169),
+        sx(64), sy(18),
+        normal
+    );
+    drawRect(
+        sx(184), sy(169),
+        sx(64), sy(18),
+        white
+    );
+    drawText(
+        sx(200), sy(175),
+        "START",
+        1,
+        white
+    );
+
+    present();
 }

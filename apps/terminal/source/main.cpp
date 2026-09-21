@@ -1169,58 +1169,43 @@ static void zoomChart(AppState &state, int amount)
 }
 
 
-// T5_FINAL_STABLE_BOTTOM
-
-static void printStableBottomRow(
-    int row,
-    const char *text
+static T6bBottomModel makeBottomUiModel(
+    const AppState &state
 )
 {
-    printf(
-        "\x1b[%d;1H%-40.40s",
-        row,
-        text ? text : ""
-    );
-}
+    T6bBottomModel model = {};
 
-static const char *stableInstrumentName(
-    Instrument instrument
-)
-{
-    if (instrument == INSTRUMENT_NAS100) {
-        return "NAS100";
+    if (state.selection.instrument == INSTRUMENT_NAS100) {
+        model.market = 0;
+    } else if (state.selection.instrument == INSTRUMENT_US30) {
+        model.market = 1;
+    } else {
+        model.market = 2;
     }
 
-    if (instrument == INSTRUMENT_US30) {
-        return "US30";
+    if (state.selection.timeframe == TIMEFRAME_15M) {
+        model.timeframe = 0;
+    } else if (state.selection.timeframe == TIMEFRAME_30M) {
+        model.timeframe = 1;
+    } else {
+        model.timeframe = 2;
     }
 
-    return "GOLD";
-}
+    model.dataConnected = state.marketReady;
+    model.nas100 = state.market.nas100;
+    model.us30 = state.market.us30;
+    model.gold = state.market.gold;
 
-static const char *stableTimeframeName(
-    Timeframe timeframe
-)
-{
-    if (timeframe == TIMEFRAME_15M) {
-        return "15M";
-    }
-
-    if (timeframe == TIMEFRAME_30M) {
-        return "30M";
-    }
-
-    return "1H";
+    return model;
 }
 
 static void renderBottomScreen(
     const AppState &state
 )
 {
-    // T6A graphics-only foundation test.
-    // No libctru console text is allowed to touch
-    // the bottom framebuffer during normal runtime.
-    (void)state;
+    t6bBottomRender(
+        makeBottomUiModel(state)
+    );
 }
 
 static void renderTopFrame(
@@ -1502,8 +1487,6 @@ int main(int argc, char *argv[])
 
     printf("\x1b[2J\x1b[H");
 
-    // T6A: establish the persistent RGB565 bottom UI once.
-    t6aBottomDrawFoundation();
     renderFrame(state);
 
     while (aptMainLoop()) {
