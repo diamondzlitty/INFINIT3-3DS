@@ -3,7 +3,7 @@
 This is a template for starting new 3DS libctru projects.
 
 
-**Current milestone:** T2 HARDWARE PASS
+**Current milestone:** T3 HARDWARE PASS
 
 ### T1 — Native Backend Networking
 
@@ -40,3 +40,21 @@ T2 tested `.3dsx` SHA-256:
 
 `ef48c2633e96b423c3ba78228cc633fc943971b1be581e16514b286768c97dc5`
 
+
+### T3 — Expanded Macro Market State
+
+Hardware verified on New Nintendo 3DS:
+
+- Existing T2 Big-3 structured state remains functional
+- Added a second HTTP feed at `/macro.txt`
+- DXY, US2Y, US10Y, WTI, VIX, and 2S10S parse into native structured state
+- US2Y and US10Y use CNBC live yield quotes from the same source
+- 2S10S is calculated as US10Y minus US2Y
+- DXY, WTI, and VIX use the existing Yahoo/yfinance transport
+- Both market and macro feeds refresh with `X`
+- `START` exits cleanly
+- No crash, freeze, reboot, or exception observed
+
+T3 tested `.3dsx` SHA-256:
+
+`dc0072485c5980c7acfda8b7fc71e3d36fccbe0f9b371df64074faff185cd76e`

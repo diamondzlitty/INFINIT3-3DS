@@ -97,6 +97,90 @@ static bool parseMarketData(
 }
 
 
+
+struct MacroData {
+    double dxy;
+    double us2y;
+    double us10y;
+    double wti;
+    double vix;
+    double curve2s10s;
+};
+
+static bool parseMacroData(
+    const std::string &body,
+    MacroData &macro,
+    std::string &error
+)
+{
+    bool haveDxy = false;
+    bool haveUs2y = false;
+    bool haveUs10y = false;
+    bool haveWti = false;
+    bool haveVix = false;
+    bool haveCurve = false;
+
+    std::istringstream input(body);
+    std::string line;
+
+    while (std::getline(input, line)) {
+        if (!line.empty() && line.back() == 13) {
+            line.pop_back();
+        }
+
+        size_t equals = line.find("=");
+
+        if (equals == std::string::npos) {
+            continue;
+        }
+
+        std::string key = line.substr(0, equals);
+        std::string value = line.substr(equals + 1);
+
+        char *end = NULL;
+        double parsed = strtod(value.c_str(), &end);
+
+        if (end == value.c_str()) {
+            continue;
+        }
+
+        if (key == "DXY") {
+            macro.dxy = parsed;
+            haveDxy = true;
+        } else if (key == "US2Y") {
+            macro.us2y = parsed;
+            haveUs2y = true;
+        } else if (key == "US10Y") {
+            macro.us10y = parsed;
+            haveUs10y = true;
+        } else if (key == "WTI") {
+            macro.wti = parsed;
+            haveWti = true;
+        } else if (key == "VIX") {
+            macro.vix = parsed;
+            haveVix = true;
+        } else if (key == "2S10S") {
+            macro.curve2s10s = parsed;
+            haveCurve = true;
+        }
+    }
+
+    if (!haveDxy || !haveUs2y || !haveUs10y || !haveWti || !haveVix || !haveCurve) {
+        error = "missing macro field:";
+
+        if (!haveDxy) error += " DXY";
+        if (!haveUs2y) error += " US2Y";
+        if (!haveUs10y) error += " US10Y";
+        if (!haveWti) error += " WTI";
+        if (!haveVix) error += " VIX";
+        if (!haveCurve) error += " 2S10S";
+
+        return false;
+    }
+
+    return true;
+}
+
 static bool loadServerConfig(ServerConfig &cfg, std::string &error)
 {
     FILE *fp = fopen(CONFIG_PATH, "r");
@@ -253,49 +337,169 @@ static bool httpGetMarket(const ServerConfig &cfg, std::string &body, std::strin
     return true;
 }
 
+static bool httpGetMacro(const ServerConfig &cfg, std::string &body, std::string &error)
+{
+    int sock = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
+    if (sock < 0) {
+        error = "socket: " + std::string(strerror(errno));
+        return false;
+    }
+
+    struct sockaddr_in server;
+    memset(&server, 0, sizeof(server));
+    server.sin_family = AF_INET;
+    server.sin_port = htons((u16)cfg.port);
+
+    in_addr_t addr = inet_addr(cfg.host.c_str());
+    if (addr == INADDR_NONE) {
+        close(sock);
+        error = "T1 config requires IPv4 address";
+        return false;
+    }
+
+    server.sin_addr.s_addr = addr;
+
+    if (connect(sock, (struct sockaddr *)&server, sizeof(server)) < 0) {
+        error = "connect: " + std::string(strerror(errno));
+        close(sock);
+        return false;
+    }
+
+    char request[512];
+    snprintf(
+        request,
+        sizeof(request),
+        "GET /macro.txt HTTP/1.0\r\n"
+        "Host: %s:%d\r\n"
+        "Connection: close\r\n"
+        "\r\n",
+        cfg.host.c_str(),
+        cfg.port
+    );
+
+    size_t requestLen = strlen(request);
+    ssize_t sent = send(sock, request, requestLen, 0);
+    if (sent < 0 || (size_t)sent != requestLen) {
+        error = "send: " + std::string(strerror(errno));
+        close(sock);
+        return false;
+    }
+
+    std::string response;
+    char buffer[1024];
+
+    for (;;) {
+        ssize_t received = recv(sock, buffer, sizeof(buffer), 0);
+
+        if (received == 0) {
+            break;
+        }
+
+        if (received < 0) {
+            error = "recv: " + std::string(strerror(errno));
+            close(sock);
+            return false;
+        }
+
+        response.append(buffer, (size_t)received);
+
+        if (response.size() > 16384) {
+            error = "HTTP response too large";
+            close(sock);
+            return false;
+        }
+    }
+
+    close(sock);
+
+    size_t firstLineEnd = response.find("\r\n");
+    if (firstLineEnd == std::string::npos) {
+        error = "invalid HTTP response";
+        return false;
+    }
+
+    std::string statusLine = response.substr(0, firstLineEnd);
+    if (statusLine.find(" 200 ") == std::string::npos) {
+        error = "HTTP status: " + statusLine;
+        return false;
+    }
+
+    size_t bodyStart = response.find("\r\n\r\n");
+    if (bodyStart == std::string::npos) {
+        error = "HTTP headers incomplete";
+        return false;
+    }
+
+    body = response.substr(bodyStart + 4);
+    return true;
+}
+
 static void printNetworkResult(const ServerConfig &cfg)
 {
-    std::string body;
+    std::string marketBody;
+    std::string macroBody;
     std::string error;
+
     MarketData market = {};
+    MacroData macro = {};
 
     printf("\x1b[2J\x1b[H");
     printf("INFINIT3 TERMINAL\n");
-    printf("NEW 3DS NATIVE T2\n\n");
+    printf("NEW 3DS NATIVE T3\n\n");
 
-    printf("SERVER\n");
-    printf("%s:%d\n\n", cfg.host.c_str(), cfg.port);
+    printf("SERVER %s:%d\n", cfg.host.c_str(), cfg.port);
 
-    printf("GET /market.txt\n");
-
-    if (!httpGetMarket(cfg, body, error)) {
-        printf("\nNETWORK: FAIL\n");
+    if (!httpGetMarket(cfg, marketBody, error)) {
+        printf("\nMARKET HTTP: FAIL\n");
         printf("%s\n", error.c_str());
         printf("\nX = retry    START = exit\n");
         return;
     }
 
-    printf("\nNETWORK: PASS\n");
-    printf("HTTP: 200\n");
+    printf("MARKET HTTP: 200\n");
 
-    if (!parseMarketData(body, market, error)) {
-        printf("\nMARKET PARSE: FAIL\n");
+    if (!parseMarketData(marketBody, market, error)) {
+        printf("MARKET PARSE: FAIL\n");
         printf("%s\n", error.c_str());
         printf("\nX = retry    START = exit\n");
         return;
     }
 
-    printf("MARKET PARSE: PASS\n\n");
+    printf("MARKET PARSE: PASS\n");
 
-    printf("BIG-3 LIVE\n");
-    printf("------------------------------\n");
-    printf("NAS100     %10.2f\n", market.nas100);
-    printf("US30       %10.2f\n", market.us30);
-    printf("GOLD       %10.2f\n", market.gold);
-    printf("------------------------------\n");
+    if (!httpGetMacro(cfg, macroBody, error)) {
+        printf("MACRO HTTP: FAIL\n");
+        printf("%s\n", error.c_str());
+        printf("\nX = retry    START = exit\n");
+        return;
+    }
 
-    printf("\nStructured market state online.\n");
-    printf("\nX = refresh    START = exit\n");
+    printf("MACRO HTTP: 200\n");
+
+    if (!parseMacroData(macroBody, macro, error)) {
+        printf("MACRO PARSE: FAIL\n");
+        printf("%s\n", error.c_str());
+        printf("\nX = retry    START = exit\n");
+        return;
+    }
+
+    printf("MACRO PARSE: PASS\n\n");
+
+    printf("BIG-3\n");
+    printf("NAS100 %10.2f\n", market.nas100);
+    printf("US30   %10.2f\n", market.us30);
+    printf("GOLD   %10.2f\n", market.gold);
+
+    printf("\nMACRO\n");
+    printf("DXY    %10.4f\n", macro.dxy);
+    printf("US2Y   %9.4f%%\n", macro.us2y);
+    printf("US10Y  %9.4f%%\n", macro.us10y);
+    printf("WTI    %10.2f\n", macro.wti);
+    printf("VIX    %10.2f\n", macro.vix);
+    printf("2S10S  %+9.4f\n", macro.curve2s10s);
+
+    printf("\nT3 structured state online.\n");
+    printf("X = refresh    START = exit\n");
 }
 
 int main(int argc, char *argv[])
