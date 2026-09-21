@@ -1,0 +1,17 @@
+.DS_Store
+build/
+**/build/
+*.o
+*.elf
+*.3dsx
+*.smdh
+*.cia
+*.3ds
+*.map
+*.log
+dist/
+.vscode/
+.idea/
+server/cache/
+server/runtime/
+server/logs/
