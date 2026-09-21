@@ -10,6 +10,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
+#include <sstream>
 #include <string>
 
 #define SOC_ALIGN 0x1000
@@ -22,6 +23,79 @@ struct ServerConfig {
     std::string host;
     int port;
 };
+struct MarketData {
+    double nas100;
+    double us30;
+    double gold;
+};
+
+static bool parseMarketData(
+    const std::string &body,
+    MarketData &market,
+    std::string &error
+)
+{
+    bool haveNas100 = false;
+    bool haveUs30 = false;
+    bool haveGold = false;
+
+    std::istringstream input(body);
+    std::string line;
+
+    while (std::getline(input, line)) {
+        if (!line.empty() && line.back() == 13) {
+            line.pop_back();
+        }
+
+        size_t equals = line.find("=");
+
+        if (equals == std::string::npos) {
+            continue;
+        }
+
+        std::string key = line.substr(0, equals);
+        std::string value = line.substr(equals + 1);
+
+        char *end = NULL;
+        double parsed = strtod(value.c_str(), &end);
+
+        if (end == value.c_str()) {
+            continue;
+        }
+
+        if (key == "NAS100") {
+            market.nas100 = parsed;
+            haveNas100 = true;
+        } else if (key == "US30") {
+            market.us30 = parsed;
+            haveUs30 = true;
+        } else if (key == "GOLD") {
+            market.gold = parsed;
+            haveGold = true;
+        }
+    }
+
+    if (!haveNas100 || !haveUs30 || !haveGold) {
+        error = "missing Big-3 field:";
+
+        if (!haveNas100) {
+            error += " NAS100";
+        }
+
+        if (!haveUs30) {
+            error += " US30";
+        }
+
+        if (!haveGold) {
+            error += " GOLD";
+        }
+
+        return false;
+    }
+
+    return true;
+}
+
 
 static bool loadServerConfig(ServerConfig &cfg, std::string &error)
 {
@@ -183,30 +257,45 @@ static void printNetworkResult(const ServerConfig &cfg)
 {
     std::string body;
     std::string error;
+    MarketData market = {};
 
     printf("\x1b[2J\x1b[H");
     printf("INFINIT3 TERMINAL\n");
-    printf("NEW 3DS NATIVE T1\n\n");
+    printf("NEW 3DS NATIVE T2\n\n");
+
     printf("SERVER\n");
     printf("%s:%d\n\n", cfg.host.c_str(), cfg.port);
+
     printf("GET /market.txt\n");
 
-    if (httpGetMarket(cfg, body, error)) {
-        printf("\nNETWORK: PASS\n");
-        printf("HTTP: 200\n\n");
-        printf("LIVE BACKEND DATA\n");
-        printf("------------------------------\n");
-        printf("%s", body.c_str());
-
-        if (body.empty() || body[body.size() - 1] != '\n') {
-            printf("\n");
-        }
-    } else {
+    if (!httpGetMarket(cfg, body, error)) {
         printf("\nNETWORK: FAIL\n");
         printf("%s\n", error.c_str());
+        printf("\nX = retry    START = exit\n");
+        return;
     }
 
-    printf("\nX = retry    START = exit\n");
+    printf("\nNETWORK: PASS\n");
+    printf("HTTP: 200\n");
+
+    if (!parseMarketData(body, market, error)) {
+        printf("\nMARKET PARSE: FAIL\n");
+        printf("%s\n", error.c_str());
+        printf("\nX = retry    START = exit\n");
+        return;
+    }
+
+    printf("MARKET PARSE: PASS\n\n");
+
+    printf("BIG-3 LIVE\n");
+    printf("------------------------------\n");
+    printf("NAS100     %10.2f\n", market.nas100);
+    printf("US30       %10.2f\n", market.us30);
+    printf("GOLD       %10.2f\n", market.gold);
+    printf("------------------------------\n");
+
+    printf("\nStructured market state online.\n");
+    printf("\nX = refresh    START = exit\n");
 }
 
 int main(int argc, char *argv[])

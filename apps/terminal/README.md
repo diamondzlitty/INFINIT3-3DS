@@ -3,7 +3,7 @@
 This is a template for starting new 3DS libctru projects.
 
 
-**Current milestone:** T1 HARDWARE PASS
+**Current milestone:** T2 HARDWARE PASS
 
 ### T1 — Native Backend Networking
 
@@ -21,4 +21,22 @@ Hardware verified on New Nintendo 3DS:
 T1 tested `.3dsx` SHA-256:
 
 `014c30c045f70b3e6b93c94c643a6e3e85675bafaf2091a75b178200a8be2054`
+
+
+
+### T2 — Big-3 Structured Market State
+
+Hardware verified on New Nintendo 3DS:
+
+- Existing T1 runtime configuration/networking remains functional
+- `/market.txt` is parsed into structured native market state
+- NAS100, US30, and GOLD are stored as numeric values
+- Structured Big-3 values render successfully on hardware
+- `X` refreshes and reparses current backend values
+- `START` exits cleanly
+- No crash, freeze, reboot, or exception observed
+
+T2 tested `.3dsx` SHA-256:
+
+`ef48c2633e96b423c3ba78228cc633fc943971b1be581e16514b286768c97dc5`
 
