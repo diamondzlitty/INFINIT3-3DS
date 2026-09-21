@@ -69,3 +69,15 @@ Terminal client shell and controls. In parallel only after its own baseline is r
 start **N0**. Build T2/N2 fixture contracts before live backend integration; then ship
 the narrow T3–T5 and N3–N4 MVP slices before considering event/replay, journals,
 cross-app panels, or Experimental analytics.
+
+## Terminal milestone status — 2026-09-21
+
+- T0: PASS — native skeleton
+- T1: PASS — backend networking
+- T2: PASS — structured Big-3 data
+- T3: PASS — expanded macro state
+- T4: PASS — native dual-screen foundation
+- T5: PASS — candle chart engine, interaction, packaging and stable hardware release candidate
+- T6: NEXT — dedicated New 3DS graphical UI and interaction layer
+
+T6 starts from the hardware-passed T5 runtime and must preserve all T1-T5 behavior.

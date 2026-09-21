@@ -58,3 +58,13 @@ Hardware verified on New Nintendo 3DS:
 T3 tested `.3dsx` SHA-256:
 
 `dc0072485c5980c7acfda8b7fc71e3d36fccbe0f9b371df64074faff185cd76e`
+
+## T5 hardware pass — 2026-09-21
+
+Terminal T5 is hardware PASS.
+
+The native terminal now supports the complete Big-3 3x3 chart matrix, animated candlestick rendering, selected-candle OHLC inspection, cursor navigation, pan and zoom, macro and market feeds, NEWS notification testing, CIA packaging and the restored legacy INFINIT3 HOME Menu icon.
+
+The final T5 bottom screen is intentionally a stable persistent status display. The richer DSi-inspired graphical bottom UI moves to T6.
+
+See `docs/T5_HARDWARE_PASS.md` for the complete milestone record.

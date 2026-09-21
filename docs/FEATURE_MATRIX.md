@@ -80,3 +80,31 @@ market payloads; regime, matrix, yield, session/clock, levels, ICC manual tracki
 snapshot compare, and watchlists; plus a native News reader with ticker, channels,
 primary-source mode, impact ranking, and watchlists. All Later and Experimental
 items remain out of the critical path.
+
+## Terminal T5 final hardware pass — 2026-09-21
+
+- [x] Real candle parser and feeds
+- [x] Native candlestick chart renderer
+- [x] NAS100 / US30 / GOLD
+- [x] 15m / 30m / 1h
+- [x] Nine complete chart combinations
+- [x] Instrument and timeframe controls
+- [x] Animated chart transitions
+- [x] Candle cursor and highlight
+- [x] Selected OHLC inspection
+- [x] Pan and zoom
+- [x] Circle Pad navigation
+- [x] C-stick navigation and zoom
+- [x] Manual refresh
+- [x] NEWS notification test framework
+- [x] Macro dashboard data
+- [x] Correct legacy HOME Menu icon
+- [x] CIA packaging and verified deployment
+- [x] Stable persistent bottom-screen status
+- [x] Hardware stability pass
+
+Deferred to T6:
+
+- graphical DSi-inspired bottom UI
+- touch controls
+- animated graphical bottom buttons

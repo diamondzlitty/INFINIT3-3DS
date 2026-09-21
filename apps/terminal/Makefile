@@ -35,6 +35,7 @@ TARGET		:=	INFINIT3_TERMINAL
 APP_AUTHOR	:=	Jaay
 APP_DESCRIPTION	:=	Native New Nintendo 3DS market terminal
 APP_TITLE	:=	INFINIT3 TERMINAL
+ICON		:=	icon.png
 BUILD		:=	build
 SOURCES		:=	source
 DATA		:=	data

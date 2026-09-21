@@ -1,0 +1,95 @@
+BasicInfo:
+  Title: "INFINIT3 TERMINAL"
+  CompanyCode: "00"
+  ProductCode: "CTR-H-IN3T"
+  ContentType: Application
+  Logo: Nintendo
+
+TitleInfo:
+  UniqueId: 0x494E3
+  Category: Application
+
+Option:
+  UseOnSD: true
+  EnableCompress: true
+  FreeProductCode: true
+
+AccessControlInfo:
+  CoreVersion: 2
+  DescVersion: 2
+  ReleaseKernelMajor: "2"
+  ReleaseKernelMinor: "50"
+  UseExtSaveData: false
+  MemoryType: Application
+  SystemMode: 64MB
+  IdealProcessor: 0
+  AffinityMask: 1
+  Priority: 16
+  MaxCpu: 0x9E
+  HandleTableSize: 0x200
+  DisableDebug: false
+  EnableForceDebug: false
+  CanWriteSharedPage: true
+  CanUsePrivilegedPriority: false
+  CanUseNonAlphabetAndNumber: true
+  PermitMainFunctionArgument: true
+  CanShareDeviceMemory: true
+  RunnableOnSleep: false
+  SpecialMemoryArrange: true
+  SystemModeExt: 124MB
+  CpuSpeed: 804MHz
+  EnableL2Cache: true
+  CanAccessCore2: false
+  # Required by the existing gfxInitDefault() renderer.
+  MemoryMapping:
+    - 1f000000-1f5fffff:r
+  # Narrow user-mode syscall set used by libctru's graphics, input, and socket runtime.
+  SystemCallAccess:
+    ControlMemory: 1
+    QueryMemory: 2
+    ExitProcess: 3
+    CreateThread: 8
+    ExitThread: 9
+    SleepThread: 10
+    CreateMutex: 19
+    ReleaseMutex: 20
+    CreateSemaphore: 21
+    ReleaseSemaphore: 22
+    CreateEvent: 23
+    SignalEvent: 24
+    ClearEvent: 25
+    CreateTimer: 26
+    SetTimer: 27
+    CancelTimer: 28
+    ClearTimer: 29
+    CloseHandle: 35
+    WaitSynchronization1: 36
+    WaitSynchronizationN: 37
+    SignalAndWait: 38
+    DuplicateHandle: 39
+    GetSystemTick: 40
+    GetHandleInfo: 41
+    GetSystemInfo: 42
+    GetProcessInfo: 43
+    ConnectToPort: 45
+    SendSyncRequest: 50
+  FileSystemAccess:
+    - "CategorySystemApplication"
+    - "DirectSdmc"
+  ServiceAccessControl:
+    # Existing graphics, SD config, Wi-Fi, input, and NEWS initialization.
+    - "APT:U"
+    - "ac:u"
+    - "cfg:u"
+    - "fs:USER"
+    - "gsp::Gpu"
+    - "gsp::Lcd"
+    - "hid:USER"
+    - "news:u"
+    - "ptm:u"
+    - "soc:U"
+
+SystemControlInfo:
+  SaveDataSize: 0KB
+  RemasterVersion: 0
+  StackSize: 0x40000
