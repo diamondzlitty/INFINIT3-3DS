@@ -15,3 +15,6 @@ dist/
 server/cache/
 server/runtime/
 server/logs/
+apps/terminal/packaging/cia/banner.bnr
+apps/terminal/packaging/cia/banner_silence.aiff
+apps/terminal/packaging/cia/banner_silence.wav
