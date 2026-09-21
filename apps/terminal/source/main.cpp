@@ -1,4 +1,5 @@
 #include <3ds.h>
+#include "bottom_ui.hpp"
 #include <3ds/services/news.h>
 
 #include <arpa/inet.h>
@@ -1216,255 +1217,10 @@ static void renderBottomScreen(
     const AppState &state
 )
 {
-    char line[64];
-
-    printStableBottomRow(
-        1,
-        "           INFINIT3 TERMINAL"
-    );
-
-    printStableBottomRow(
-        2,
-        "========================================"
-    );
-
-    snprintf(
-        line,
-        sizeof(line),
-        "MARKET: %-6s       TIMEFRAME: %-3s",
-        stableInstrumentName(
-            state.selection.instrument
-        ),
-        stableTimeframeName(
-            state.selection.timeframe
-        )
-    );
-
-    printStableBottomRow(
-        4,
-        line
-    );
-
-    printStableBottomRow(
-        5,
-        "----------------------------------------"
-    );
-
-    if (
-        state.candleReady &&
-        state.view.cursor >= 0 &&
-        state.view.cursor <
-            (int)state.candles.size()
-    ) {
-        const Candle &candle =
-            state.candles[state.view.cursor];
-
-        snprintf(
-            line,
-            sizeof(line),
-            "CANDLE: %d/%lu       ZOOM: %d",
-            state.view.cursor + 1,
-            (unsigned long)state.candles.size(),
-            state.view.visibleCount
-        );
-
-        printStableBottomRow(
-            7,
-            line
-        );
-
-        snprintf(
-            line,
-            sizeof(line),
-            "OPEN  %-12.2f HIGH %-12.2f",
-            candle.open,
-            candle.high
-        );
-
-        printStableBottomRow(
-            8,
-            line
-        );
-
-        snprintf(
-            line,
-            sizeof(line),
-            "LOW   %-12.2f CLOSE %-12.2f",
-            candle.low,
-            candle.close
-        );
-
-        printStableBottomRow(
-            9,
-            line
-        );
-
-        snprintf(
-            line,
-            sizeof(line),
-            "VIEW: %d - %d",
-            state.view.windowStart + 1,
-            state.view.windowStart +
-                state.view.visibleCount
-        );
-
-        printStableBottomRow(
-            10,
-            line
-        );
-    } else {
-        printStableBottomRow(
-            7,
-            "CANDLE: --"
-        );
-
-        printStableBottomRow(
-            8,
-            "OPEN --             HIGH --"
-        );
-
-        printStableBottomRow(
-            9,
-            "LOW  --             CLOSE --"
-        );
-
-        printStableBottomRow(
-            10,
-            "VIEW: --"
-        );
-    }
-
-    printStableBottomRow(
-        12,
-        "----------------------------------------"
-    );
-
-    if (state.marketReady) {
-        snprintf(
-            line,
-            sizeof(line),
-            "NAS %.2f  US30 %.2f",
-            state.market.nas100,
-            state.market.us30
-        );
-
-        printStableBottomRow(
-            14,
-            line
-        );
-
-        snprintf(
-            line,
-            sizeof(line),
-            "GOLD %.2f",
-            state.market.gold
-        );
-
-        printStableBottomRow(
-            15,
-            line
-        );
-    } else {
-        printStableBottomRow(
-            14,
-            "BIG-3 DATA: --"
-        );
-
-        printStableBottomRow(
-            15,
-            ""
-        );
-    }
-
-    if (state.macroReady) {
-        snprintf(
-            line,
-            sizeof(line),
-            "DXY %.3f  VIX %.2f  WTI %.2f",
-            state.macro.dxy,
-            state.macro.vix,
-            state.macro.wti
-        );
-
-        printStableBottomRow(
-            17,
-            line
-        );
-
-        snprintf(
-            line,
-            sizeof(line),
-            "2Y %.3f%%  10Y %.3f%%  2S10S %+.3f",
-            state.macro.us2y,
-            state.macro.us10y,
-            state.macro.curve2s10s
-        );
-
-        printStableBottomRow(
-            18,
-            line
-        );
-    } else {
-        printStableBottomRow(
-            17,
-            "MACRO DATA: --"
-        );
-
-        printStableBottomRow(
-            18,
-            ""
-        );
-    }
-
-    printStableBottomRow(
-        20,
-        "----------------------------------------"
-    );
-
-    snprintf(
-        line,
-        sizeof(line),
-        "NEWS: %-5s     STATUS: %.17s",
-        state.newsReady ? "READY" : "OFF",
-        state.status.c_str()
-    );
-
-    printStableBottomRow(
-        22,
-        line
-    );
-
-    snprintf(
-        line,
-        sizeof(line),
-        "%.40s",
-        state.detail.c_str()
-    );
-
-    printStableBottomRow(
-        23,
-        line
-    );
-
-    printStableBottomRow(
-        25,
-        "L/R MARKET       ZL/ZR TIMEFRAME"
-    );
-
-    printStableBottomRow(
-        26,
-        "D-PAD CURSOR/ZOOM   C-PAD FAST NAV"
-    );
-
-    printStableBottomRow(
-        27,
-        "C-STICK NAV/ZOOM    X REFRESH"
-    );
-
-    printStableBottomRow(
-        28,
-        "Y ALERT             START EXIT"
-    );
+    // T6A graphics-only foundation test.
+    // No libctru console text is allowed to touch
+    // the bottom framebuffer during normal runtime.
+    (void)state;
 }
 
 static void renderTopFrame(
@@ -1657,6 +1413,7 @@ int main(int argc, char *argv[])
     gfxSetDoubleBuffering(GFX_TOP, true);
     gfxSetDoubleBuffering(GFX_BOTTOM, false);
     consoleInit(GFX_BOTTOM, NULL);
+    t6aBottomInit();
 
     printf("INFINIT3 TERMINAL\n");
     printf("NEW 3DS NATIVE T5 RC\n\n");
@@ -1744,6 +1501,9 @@ int main(int argc, char *argv[])
     refreshData(cfg, state, TRANSITION_ENTRANCE, 1);
 
     printf("\x1b[2J\x1b[H");
+
+    // T6A: establish the persistent RGB565 bottom UI once.
+    t6aBottomDrawFoundation();
     renderFrame(state);
 
     while (aptMainLoop()) {
