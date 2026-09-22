@@ -25,6 +25,14 @@ struct T6bBottomModel {
     bool macroConnected;
     bool newsReady;
     bool selectedCandleValid;
+    bool syncActive;
+    bool degraded;
+    bool cursorLatest;
+
+    int cursorPosition;
+    int candleCount;
+    int marketPulseFrames;
+    int faultSource;
 
     double nas100;
     double us30;

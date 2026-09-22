@@ -1198,6 +1198,33 @@ static T6bBottomModel makeBottomUiModel(
     model.macroConnected = state.macroReady;
     model.newsReady = state.newsReady;
 
+    model.syncActive = state.status == "SYNC";
+    model.degraded =
+        state.status.find("DEGRADED") != std::string::npos ||
+        !state.candleReady ||
+        !state.marketReady ||
+        !state.macroReady;
+
+    model.candleCount = (int)state.candles.size();
+    model.cursorPosition =
+        state.view.cursor >= 0
+        ? state.view.cursor + 1
+        : 0;
+    model.cursorLatest =
+        model.candleCount > 0 &&
+        model.cursorPosition == model.candleCount;
+
+    model.marketPulseFrames = state.marketPulseFrames;
+
+    model.faultSource = 0;
+    if (state.detail.rfind("CANDLE:", 0) == 0) {
+        model.faultSource = 1;
+    } else if (state.detail.rfind("MARKET:", 0) == 0) {
+        model.faultSource = 2;
+    } else if (state.detail.rfind("MACRO:", 0) == 0) {
+        model.faultSource = 3;
+    }
+
     model.nas100 = state.market.nas100;
     model.us30 = state.market.us30;
     model.gold = state.market.gold;
@@ -1337,6 +1364,12 @@ static void refreshData(
 {
     showLoading(state);
 
+    // Make SYNC visible before synchronous network work blocks the input loop.
+    renderBottomFeedback(
+        state,
+        T6C_TARGET_NONE
+    );
+
     bool wasAtLatest =
         !state.candles.empty() &&
         state.view.cursor == (int)state.candles.size() - 1;
@@ -1396,9 +1429,10 @@ static void refreshData(
         state.transition = TRANSITION_NONE;
     }
 
-    bool changed = false;
+    bool marketChanged = false;
+
     if (marketOk) {
-        changed =
+        marketChanged =
             state.marketReady &&
             (valueChanged(state.market.nas100, newMarket.nas100) ||
              valueChanged(state.market.us30, newMarket.us30) ||
@@ -1408,19 +1442,14 @@ static void refreshData(
     }
 
     if (macroOk) {
-        changed = changed ||
-            (state.macroReady &&
-             (valueChanged(state.macro.dxy, newMacro.dxy) ||
-              valueChanged(state.macro.us2y, newMacro.us2y) ||
-              valueChanged(state.macro.us10y, newMacro.us10y) ||
-              valueChanged(state.macro.wti, newMacro.wti) ||
-              valueChanged(state.macro.vix, newMacro.vix) ||
-              valueChanged(state.macro.curve2s10s, newMacro.curve2s10s)));
         state.macro = newMacro;
         state.macroReady = true;
     }
 
-    if (changed) state.marketPulseFrames = 24;
+    // Only a real Big-3 price change drives the FRESH pulse.
+    if (marketChanged) {
+        state.marketPulseFrames = 24;
+    }
 
     if (candleOk && marketOk && macroOk) {
         state.status = "ONLINE // SYNC OK";
@@ -1576,7 +1605,9 @@ int main(int argc, char *argv[])
         u32 held = hidKeysHeld();
 
         bool needsFrame = down != 0;
-        bool bottomDirty = down != 0;
+        bool bottomDirty =
+            down != 0 ||
+            state.marketPulseFrames > 0;
 
         touchPosition touch = {};
         int touchTarget = T6C_TARGET_NONE;

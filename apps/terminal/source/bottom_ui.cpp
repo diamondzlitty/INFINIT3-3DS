@@ -447,22 +447,58 @@ void t6bBottomRender(
         white
     );
 
-    char readiness[40];
+    const char *stateLabel = "ONLINE";
+
+    if (model.syncActive) {
+        stateLabel = "SYNC";
+    } else if (model.degraded) {
+        stateLabel = "DEGRADED";
+    } else if (model.marketPulseFrames > 12) {
+        stateLabel = "FRESH";
+    }
+
+    const char *cursorLabel = "----";
+    if (model.candleCount > 0 && model.cursorPosition > 0) {
+        cursorLabel = model.cursorLatest ? "LIVE" : "HIST";
+    }
+
+    const char *faultLabel = "";
+    if (model.faultSource == 1) {
+        faultLabel = " CND";
+    } else if (model.faultSource == 2) {
+        faultLabel = " MKT";
+    } else if (model.faultSource == 3) {
+        faultLabel = " MAC";
+    }
+
+    char statusLine[80];
     snprintf(
-        readiness,
-        sizeof(readiness),
-        "CND %d  MKT %d  MAC %d  NWS %d",
+        statusLine,
+        sizeof(statusLine),
+        "%s%s CND%d MKT%d MAC%d NWS%d %s C%d-%d",
+        stateLabel,
+        faultLabel,
         model.candleConnected ? 1 : 0,
         model.dataConnected ? 1 : 0,
         model.macroConnected ? 1 : 0,
-        model.newsReady ? 1 : 0
+        model.newsReady ? 1 : 0,
+        cursorLabel,
+        model.cursorPosition,
+        model.candleCount
     );
 
+    const u16 statusColor =
+        (model.syncActive ||
+         model.degraded ||
+         model.marketPulseFrames > 12)
+        ? white
+        : secondary;
+
     drawText(
-        sx(61), sy(29),
-        readiness,
+        sx(4), sy(29),
+        statusLine,
         1,
-        secondary
+        statusColor
     );
 
     // Preserve the proven DSi three-column geometry.
