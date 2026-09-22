@@ -1450,6 +1450,211 @@ static bool refreshMarketTicker(
     return true;
 }
 
+static bool candlesChanged(
+    const std::vector<Candle> &before,
+    const std::vector<Candle> &after
+)
+{
+    if (before.size() != after.size()) {
+        return true;
+    }
+
+    for (size_t i = 0; i < before.size(); i++) {
+        if (
+            valueChanged(before[i].open, after[i].open) ||
+            valueChanged(before[i].high, after[i].high) ||
+            valueChanged(before[i].low, after[i].low) ||
+            valueChanged(before[i].close, after[i].close)
+        ) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+static bool refreshCandlesAutomatic(
+    const ServerConfig &cfg,
+    AppState &state,
+    bool &changed,
+    std::string &error
+)
+{
+    changed = false;
+
+    std::string body;
+    std::vector<Candle> nextCandles;
+
+    if (
+        !httpGetCandles(
+            cfg,
+            state.selection,
+            body,
+            error
+        ) ||
+        !parseCandles(
+            body,
+            nextCandles,
+            error
+        )
+    ) {
+        return false;
+    }
+
+    const bool wasAtLatest =
+        !state.candles.empty() &&
+        state.view.cursor ==
+            (int)state.candles.size() - 1;
+
+    changed = candlesChanged(
+        state.candles,
+        nextCandles
+    );
+
+    state.candleReady = true;
+
+    if (!changed) {
+        return true;
+    }
+
+    state.previousCandles =
+        state.candles;
+
+    state.candles =
+        nextCandles;
+
+    if (state.view.visibleCount <= 0) {
+        state.view.visibleCount = 60;
+    }
+
+    if (
+        wasAtLatest ||
+        state.view.cursor < 0
+    ) {
+        state.view.cursor =
+            (int)state.candles.size() - 1;
+
+        state.view.windowStart =
+            (int)state.candles.size() -
+            state.view.visibleCount;
+    }
+
+    clampChartView(state);
+
+    state.transition =
+        TRANSITION_REFRESH;
+
+    state.transitionFrame = 0;
+    state.transitionLength = 14;
+    state.transitionDirection = 0;
+
+    return true;
+}
+
+static bool refreshMacroAutomatic(
+    const ServerConfig &cfg,
+    AppState &state,
+    bool &changed,
+    std::string &error
+)
+{
+    changed = false;
+
+    std::string body;
+    MacroData nextMacro = {};
+
+    if (
+        !httpGetMacro(
+            cfg,
+            body,
+            error
+        ) ||
+        !parseMacroData(
+            body,
+            nextMacro,
+            error
+        )
+    ) {
+        return false;
+    }
+
+    changed =
+        !state.macroReady ||
+        valueChanged(
+            state.macro.dxy,
+            nextMacro.dxy
+        ) ||
+        valueChanged(
+            state.macro.us2y,
+            nextMacro.us2y
+        ) ||
+        valueChanged(
+            state.macro.us10y,
+            nextMacro.us10y
+        ) ||
+        valueChanged(
+            state.macro.wti,
+            nextMacro.wti
+        ) ||
+        valueChanged(
+            state.macro.vix,
+            nextMacro.vix
+        ) ||
+        valueChanged(
+            state.macro.curve2s10s,
+            nextMacro.curve2s10s
+        );
+
+    state.macro =
+        nextMacro;
+
+    state.macroReady = true;
+
+    return true;
+}
+
+static bool refreshLevelsAutomatic(
+    const ServerConfig &cfg,
+    AppState &state,
+    bool &changed,
+    std::string &error
+)
+{
+    changed = false;
+
+    SessionLevelsData nextLevels = {};
+
+    if (
+        !fetchSessionLevels(
+            cfg.host,
+            cfg.port,
+            nextLevels,
+            error
+        )
+    ) {
+        return false;
+    }
+
+    changed =
+        !state.levelsReady ||
+        state.levels.session !=
+            nextLevels.session ||
+        state.levels.sessionProgress !=
+            nextLevels.sessionProgress;
+
+    state.levels =
+        nextLevels;
+
+    state.levelsReady = true;
+
+    // The underlying level values can move even when
+    // session/progress has not changed. Force a bottom
+    // refresh so future T7C level panels remain live.
+    changed = true;
+
+    return true;
+}
+
 static void refreshData(
     const ServerConfig &cfg,
     AppState &state,
@@ -1706,7 +1911,22 @@ int main(int argc, char *argv[])
     int lastVisualPressedTarget = T6C_TARGET_NONE;
     bool requestExit = false;
 
-    u64 nextMarketPollMs = osGetTime() + 1000;
+    const u64 schedulerStartMs =
+        osGetTime();
+
+    u64 nextMarketPollMs =
+        schedulerStartMs + 1000;
+
+    // Stagger the slower feeds so multiple synchronous
+    // HTTP requests do not intentionally land together.
+    u64 nextLevelsPollMs =
+        schedulerStartMs + 2500;
+
+    u64 nextCandlePollMs =
+        schedulerStartMs + 7000;
+
+    u64 nextMacroPollMs =
+        schedulerStartMs + 12000;
 
     while (aptMainLoop()) {
         hidScanInput();
@@ -1720,6 +1940,7 @@ int main(int argc, char *argv[])
             state.marketPulseFrames > 0;
 
         const u64 nowMs = osGetTime();
+        bool automaticNetworkUsed = false;
 
         if (nowMs >= nextMarketPollMs) {
             bool tickerChanged = false;
@@ -1732,10 +1953,103 @@ int main(int argc, char *argv[])
                 tickerError
             );
 
-            nextMarketPollMs = nowMs + 1000;
+            nextMarketPollMs =
+                nowMs + 1000;
 
-            if (tickerOk && tickerChanged) {
+            automaticNetworkUsed = true;
+
+            if (
+                tickerOk &&
+                tickerChanged
+            ) {
                 state.marketPulseFrames = 24;
+                needsFrame = true;
+                bottomDirty = true;
+            }
+        }
+
+        if (
+            !automaticNetworkUsed &&
+            nowMs >= nextLevelsPollMs
+        ) {
+            bool levelsChanged = false;
+            std::string levelsError;
+
+            bool levelsOk =
+                refreshLevelsAutomatic(
+                    cfg,
+                    state,
+                    levelsChanged,
+                    levelsError
+                );
+
+            nextLevelsPollMs =
+                nowMs + 5000;
+
+            automaticNetworkUsed = true;
+
+            if (
+                levelsOk &&
+                levelsChanged
+            ) {
+                needsFrame = true;
+                bottomDirty = true;
+            }
+        }
+
+        if (
+            !automaticNetworkUsed &&
+            nowMs >= nextCandlePollMs
+        ) {
+            bool candleChanged = false;
+            std::string candleError;
+
+            bool candleOk =
+                refreshCandlesAutomatic(
+                    cfg,
+                    state,
+                    candleChanged,
+                    candleError
+                );
+
+            nextCandlePollMs =
+                nowMs + 15000;
+
+            automaticNetworkUsed = true;
+
+            if (
+                candleOk &&
+                candleChanged
+            ) {
+                needsFrame = true;
+                bottomDirty = true;
+            }
+        }
+
+        if (
+            !automaticNetworkUsed &&
+            nowMs >= nextMacroPollMs
+        ) {
+            bool macroChanged = false;
+            std::string macroError;
+
+            bool macroOk =
+                refreshMacroAutomatic(
+                    cfg,
+                    state,
+                    macroChanged,
+                    macroError
+                );
+
+            nextMacroPollMs =
+                nowMs + 60000;
+
+            automaticNetworkUsed = true;
+
+            if (
+                macroOk &&
+                macroChanged
+            ) {
                 needsFrame = true;
                 bottomDirty = true;
             }
