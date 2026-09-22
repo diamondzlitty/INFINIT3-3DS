@@ -375,6 +375,19 @@ int t6cBottomHitTest(int x, int y)
     return T6C_TARGET_NONE;
 }
 
+static u16 liveRgb565(
+    u8 red,
+    u8 green,
+    u8 blue
+)
+{
+    return (u16)(
+        ((red >> 3) << 11) |
+        ((green >> 2) << 5) |
+        (blue >> 3)
+    );
+}
+
 void t6bBottomRender(
     const T6bBottomModel &model
 )
@@ -385,6 +398,26 @@ void t6bBottomRender(
     const u16 pressed = gray(140);
     const u16 secondary = gray(170);
     const u16 white = gray(255);
+
+    // TradingView-style directional accents.
+    // The rest of the INFINIT3 interface remains grayscale.
+    const u16 tickerUp = liveRgb565(8, 153, 129);
+    const u16 tickerDown = liveRgb565(242, 54, 69);
+
+    const u16 nasPriceColor =
+        model.nasDirection > 0
+        ? tickerUp
+        : (model.nasDirection < 0 ? tickerDown : white);
+
+    const u16 us30PriceColor =
+        model.us30Direction > 0
+        ? tickerUp
+        : (model.us30Direction < 0 ? tickerDown : white);
+
+    const u16 goldPriceColor =
+        model.goldDirection > 0
+        ? tickerUp
+        : (model.goldDirection < 0 ? tickerDown : white);
 
     fillScreen(background);
 
@@ -592,7 +625,7 @@ void t6bBottomRender(
         sx(8), sy(63),
         nasPrice,
         1,
-        white
+        nasPriceColor
     );
 
     drawText(
@@ -606,7 +639,7 @@ void t6bBottomRender(
         sx(8), sy(105),
         us30Price,
         1,
-        white
+        us30PriceColor
     );
 
     drawText(
@@ -620,7 +653,7 @@ void t6bBottomRender(
         sx(8), sy(147),
         goldPrice,
         1,
-        white
+        goldPriceColor
     );
 
     drawText(

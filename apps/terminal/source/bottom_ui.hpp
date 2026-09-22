@@ -34,6 +34,9 @@ struct T6bBottomModel {
     int candleCount;
     int marketPulseFrames;
     int faultSource;
+    int nasDirection;
+    int us30Direction;
+    int goldDirection;
 
     double nas100;
     double us30;

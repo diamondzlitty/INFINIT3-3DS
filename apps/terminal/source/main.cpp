@@ -1083,6 +1083,9 @@ struct AppState {
     int uiPulseFrames;
     int marketPulseFrames;
     int inputRepeatCooldown;
+    int nasDirection;
+    int us30Direction;
+    int goldDirection;
     std::string status;
     std::string detail;
 };
@@ -1236,6 +1239,10 @@ static T6bBottomModel makeBottomUiModel(
     model.us30 = state.market.us30;
     model.gold = state.market.gold;
 
+    model.nasDirection = state.nasDirection;
+    model.us30Direction = state.us30Direction;
+    model.goldDirection = state.goldDirection;
+
     model.selectedCandleValid = false;
 
     if (
@@ -1362,6 +1369,87 @@ static bool valueChanged(double before, double after)
     return fabs(before - after) > 0.0001;
 }
 
+static int marketDirection(
+    double before,
+    double after
+)
+{
+    if (!valueChanged(before, after)) return 0;
+    return after > before ? 1 : -1;
+}
+
+static bool applyMarketUpdate(
+    AppState &state,
+    const MarketData &nextMarket
+)
+{
+    bool changed = false;
+
+    if (state.marketReady) {
+        int direction = marketDirection(
+            state.market.nas100,
+            nextMarket.nas100
+        );
+
+        if (direction != 0) {
+            state.nasDirection = direction;
+            changed = true;
+        }
+
+        direction = marketDirection(
+            state.market.us30,
+            nextMarket.us30
+        );
+
+        if (direction != 0) {
+            state.us30Direction = direction;
+            changed = true;
+        }
+
+        direction = marketDirection(
+            state.market.gold,
+            nextMarket.gold
+        );
+
+        if (direction != 0) {
+            state.goldDirection = direction;
+            changed = true;
+        }
+    }
+
+    state.market = nextMarket;
+    state.marketReady = true;
+
+    return changed;
+}
+
+static bool refreshMarketTicker(
+    const ServerConfig &cfg,
+    AppState &state,
+    bool &changed,
+    std::string &error
+)
+{
+    changed = false;
+
+    std::string body;
+    MarketData nextMarket = {};
+
+    if (
+        !httpGetMarket(cfg, body, error) ||
+        !parseMarketData(body, nextMarket, error)
+    ) {
+        return false;
+    }
+
+    changed = applyMarketUpdate(
+        state,
+        nextMarket
+    );
+
+    return true;
+}
+
 static void refreshData(
     const ServerConfig &cfg,
     AppState &state,
@@ -1448,13 +1536,10 @@ static void refreshData(
     bool marketChanged = false;
 
     if (marketOk) {
-        marketChanged =
-            state.marketReady &&
-            (valueChanged(state.market.nas100, newMarket.nas100) ||
-             valueChanged(state.market.us30, newMarket.us30) ||
-             valueChanged(state.market.gold, newMarket.gold));
-        state.market = newMarket;
-        state.marketReady = true;
+        marketChanged = applyMarketUpdate(
+            state,
+            newMarket
+        );
     }
 
     if (macroOk) {
@@ -1621,6 +1706,8 @@ int main(int argc, char *argv[])
     int lastVisualPressedTarget = T6C_TARGET_NONE;
     bool requestExit = false;
 
+    u64 nextMarketPollMs = osGetTime() + 1000;
+
     while (aptMainLoop()) {
         hidScanInput();
 
@@ -1631,6 +1718,28 @@ int main(int argc, char *argv[])
         bool bottomDirty =
             down != 0 ||
             state.marketPulseFrames > 0;
+
+        const u64 nowMs = osGetTime();
+
+        if (nowMs >= nextMarketPollMs) {
+            bool tickerChanged = false;
+            std::string tickerError;
+
+            bool tickerOk = refreshMarketTicker(
+                cfg,
+                state,
+                tickerChanged,
+                tickerError
+            );
+
+            nextMarketPollMs = nowMs + 1000;
+
+            if (tickerOk && tickerChanged) {
+                state.marketPulseFrames = 24;
+                needsFrame = true;
+                bottomDirty = true;
+            }
+        }
 
         touchPosition touch = {};
         int touchTarget = T6C_TARGET_NONE;
