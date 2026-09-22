@@ -19,10 +19,28 @@ struct T6bBottomModel {
     int market;
     int timeframe;
     int pressedTarget;
+
     bool dataConnected;
+    bool candleConnected;
+    bool macroConnected;
+    bool newsReady;
+    bool selectedCandleValid;
+
     double nas100;
     double us30;
     double gold;
+
+    double candleOpen;
+    double candleHigh;
+    double candleLow;
+    double candleClose;
+
+    double dxy;
+    double us2y;
+    double us10y;
+    double wti;
+    double vix;
+    double curve2s10s;
 };
 
 bool t6aBottomInit();

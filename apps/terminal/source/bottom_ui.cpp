@@ -130,6 +130,11 @@ static const u8 FONT_S[7] = {15,16,16,14,1,1,30};
 static const u8 FONT_T[7] = {31,4,4,4,4,4,4};
 static const u8 FONT_U[7] = {17,17,17,17,17,17,14};
 static const u8 FONT_V[7] = {17,17,17,17,17,10,4};
+static const u8 FONT_C[7] = {14,17,16,16,16,17,14};
+static const u8 FONT_K[7] = {17,18,20,24,20,18,17};
+static const u8 FONT_W[7] = {17,17,17,21,21,21,10};
+static const u8 FONT_X[7] = {17,17,10,4,10,17,17};
+static const u8 FONT_Y[7] = {17,17,10,4,4,4,4};
 
 static const u8 FONT_0[7] = {14,17,19,21,25,17,14};
 static const u8 FONT_1[7] = {4,12,4,4,4,4,14};
@@ -164,6 +169,11 @@ static const u8 *getGlyph(char c)
         case 'T': return FONT_T;
         case 'U': return FONT_U;
         case 'V': return FONT_V;
+        case 'C': return FONT_C;
+        case 'K': return FONT_K;
+        case 'W': return FONT_W;
+        case 'X': return FONT_X;
+        case 'Y': return FONT_Y;
 
         case '0': return FONT_0;
         case '1': return FONT_1;
@@ -307,6 +317,47 @@ static bool t6cInside(
         y < top + height;
 }
 
+static void formatMetric(
+    char *buffer,
+    size_t size,
+    bool ready,
+    double value
+)
+{
+    if (!ready) {
+        snprintf(buffer, size, "--");
+        return;
+    }
+
+    snprintf(buffer, size, "%.2f", value);
+}
+
+static void formatLabeledMetric(
+    char *buffer,
+    size_t size,
+    const char *label,
+    bool ready,
+    double value
+)
+{
+    char valueText[20];
+
+    formatMetric(
+        valueText,
+        sizeof(valueText),
+        ready,
+        value
+    );
+
+    snprintf(
+        buffer,
+        size,
+        "%s %s",
+        label,
+        valueText
+    );
+}
+
 int t6cBottomHitTest(int x, int y)
 {
     if (t6cInside(x, y, sx(4),   sy(45),  sx(77), sy(30))) return T6C_TARGET_NAS100;
@@ -332,6 +383,7 @@ void t6bBottomRender(
     const u16 normal = gray(49);
     const u16 selected = gray(99);
     const u16 pressed = gray(140);
+    const u16 secondary = gray(170);
     const u16 white = gray(255);
 
     fillScreen(background);
@@ -381,7 +433,7 @@ void t6bBottomRender(
         ? pressed
         : normal;
 
-    // Original DSi layout scaled 5/4 from 256x192 to 320x240.
+    // Header
     drawText(
         sx(77), sy(8),
         "INFINIT3 TERMINAL",
@@ -395,6 +447,25 @@ void t6bBottomRender(
         white
     );
 
+    char readiness[40];
+    snprintf(
+        readiness,
+        sizeof(readiness),
+        "CND %d  MKT %d  MAC %d  NWS %d",
+        model.candleConnected ? 1 : 0,
+        model.dataConnected ? 1 : 0,
+        model.macroConnected ? 1 : 0,
+        model.newsReady ? 1 : 0
+    );
+
+    drawText(
+        sx(61), sy(29),
+        readiness,
+        1,
+        secondary
+    );
+
+    // Preserve the proven DSi three-column geometry.
     drawVLine(
         sx(86), sy(39),
         sy(126),
@@ -407,6 +478,7 @@ void t6bBottomRender(
         white
     );
 
+    // Market selectors.
     fillRect(
         sx(4), sy(45),
         sx(77), sy(30),
@@ -425,6 +497,7 @@ void t6bBottomRender(
         goldColor
     );
 
+    // Timeframe selectors.
     fillRect(
         sx(201), sy(45),
         sx(51), sy(30),
@@ -441,27 +514,6 @@ void t6bBottomRender(
         sx(201), sy(129),
         sx(51), sy(30),
         oneHourColor
-    );
-
-    drawText(
-        sx(10), sy(56),
-        "NAS100",
-        1,
-        white
-    );
-
-    drawText(
-        sx(20), sy(98),
-        "US30",
-        1,
-        white
-    );
-
-    drawText(
-        sx(20), sy(140),
-        "GOLD",
-        1,
-        white
     );
 
     char nasPrice[24];
@@ -489,22 +541,44 @@ void t6bBottomRender(
         model.gold
     );
 
+    // Stack each live price inside its own market selector.
     drawText(
-        sx(105), sy(56),
+        sx(8), sy(50),
+        "NAS100",
+        1,
+        white
+    );
+
+    drawText(
+        sx(8), sy(63),
         nasPrice,
         1,
         white
     );
 
     drawText(
-        sx(105), sy(98),
+        sx(8), sy(92),
+        "US30",
+        1,
+        white
+    );
+
+    drawText(
+        sx(8), sy(105),
         us30Price,
         1,
         white
     );
 
     drawText(
-        sx(105), sy(140),
+        sx(8), sy(134),
+        "GOLD",
+        1,
+        white
+    );
+
+    drawText(
+        sx(8), sy(147),
         goldPrice,
         1,
         white
@@ -531,6 +605,115 @@ void t6bBottomRender(
         white
     );
 
+    // Selected-candle OHLC occupies the upper center column.
+    drawText(
+        sx(121), sy(42),
+        "OHLC",
+        1,
+        secondary
+    );
+
+    char metric[40];
+
+    formatLabeledMetric(
+        metric,
+        sizeof(metric),
+        "O",
+        model.selectedCandleValid,
+        model.candleOpen
+    );
+    drawText(sx(91), sy(51), metric, 1, white);
+
+    formatLabeledMetric(
+        metric,
+        sizeof(metric),
+        "H",
+        model.selectedCandleValid,
+        model.candleHigh
+    );
+    drawText(sx(91), sy(63), metric, 1, white);
+
+    formatLabeledMetric(
+        metric,
+        sizeof(metric),
+        "L",
+        model.selectedCandleValid,
+        model.candleLow
+    );
+    drawText(sx(91), sy(92), metric, 1, white);
+
+    formatLabeledMetric(
+        metric,
+        sizeof(metric),
+        "C",
+        model.selectedCandleValid,
+        model.candleClose
+    );
+    drawText(sx(91), sy(104), metric, 1, white);
+
+    // Compact macro dashboard in the lower center column.
+    drawText(
+        sx(119), sy(121),
+        "MACRO",
+        1,
+        secondary
+    );
+
+    formatLabeledMetric(
+        metric,
+        sizeof(metric),
+        "DXY",
+        model.macroConnected,
+        model.dxy
+    );
+    drawText(sx(90), sy(132), metric, 1, white);
+
+    formatLabeledMetric(
+        metric,
+        sizeof(metric),
+        "2Y",
+        model.macroConnected,
+        model.us2y
+    );
+    drawText(sx(143), sy(132), metric, 1, white);
+
+    formatLabeledMetric(
+        metric,
+        sizeof(metric),
+        "VIX",
+        model.macroConnected,
+        model.vix
+    );
+    drawText(sx(90), sy(142), metric, 1, white);
+
+    formatLabeledMetric(
+        metric,
+        sizeof(metric),
+        "10Y",
+        model.macroConnected,
+        model.us10y
+    );
+    drawText(sx(143), sy(142), metric, 1, white);
+
+    formatLabeledMetric(
+        metric,
+        sizeof(metric),
+        "WTI",
+        model.macroConnected,
+        model.wti
+    );
+    drawText(sx(90), sy(152), metric, 1, white);
+
+    formatLabeledMetric(
+        metric,
+        sizeof(metric),
+        "2S10S",
+        model.macroConnected,
+        model.curve2s10s
+    );
+    drawText(sx(143), sy(152), metric, 1, white);
+
+    // Bottom action row remains exactly where T6C touch expects it.
     fillRect(
         sx(8), sy(169),
         sx(64), sy(18),

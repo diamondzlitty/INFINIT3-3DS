@@ -1194,9 +1194,37 @@ static T6bBottomModel makeBottomUiModel(
     }
 
     model.dataConnected = state.marketReady;
+    model.candleConnected = state.candleReady;
+    model.macroConnected = state.macroReady;
+    model.newsReady = state.newsReady;
+
     model.nas100 = state.market.nas100;
     model.us30 = state.market.us30;
     model.gold = state.market.gold;
+
+    model.selectedCandleValid = false;
+
+    if (
+        state.candleReady &&
+        state.view.cursor >= 0 &&
+        state.view.cursor < (int)state.candles.size()
+    ) {
+        const Candle &selected =
+            state.candles[state.view.cursor];
+
+        model.selectedCandleValid = true;
+        model.candleOpen = selected.open;
+        model.candleHigh = selected.high;
+        model.candleLow = selected.low;
+        model.candleClose = selected.close;
+    }
+
+    model.dxy = state.macro.dxy;
+    model.us2y = state.macro.us2y;
+    model.us10y = state.macro.us10y;
+    model.wti = state.macro.wti;
+    model.vix = state.macro.vix;
+    model.curve2s10s = state.macro.curve2s10s;
 
     return model;
 }
