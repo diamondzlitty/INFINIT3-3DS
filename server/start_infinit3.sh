@@ -15,7 +15,7 @@ echo "========================================"
 # STOP OLD COPIES
 # ==================================================
 
-for SERVICE in http market news caffeinate; do
+for SERVICE in http market news levels caffeinate; do
 
     PIDFILE="$BASE/.$SERVICE.pid"
 
@@ -58,6 +58,14 @@ nohup python3 -u news_feed.py \
     > "$LOGS/news.log" 2>&1 &
 
 echo $! > "$BASE/.news.pid"
+
+# ==================================================
+# SESSION / LEVELS FEED
+# ==================================================
+
+nohup python3 -u session_levels_feed.py > "$LOGS/session_levels.log" 2>&1 &
+
+echo $! > "$BASE/.levels.pid"
 
 # ==================================================
 # KEEP MAC AWAKE
@@ -105,6 +113,8 @@ check_service \
 check_service \
     "NEWS FEED:" \
     "$BASE/.news.pid"
+
+check_service "SESSION LEVELS:" "$BASE/.levels.pid"
 
 check_service \
     "SLEEP PREVENTION:" \
