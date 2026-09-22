@@ -291,6 +291,39 @@ bool t6aBottomInit()
         ) == GSP_RGB565_OES;
 }
 
+static bool t6cInside(
+    int x,
+    int y,
+    int left,
+    int top,
+    int width,
+    int height
+)
+{
+    return
+        x >= left &&
+        x < left + width &&
+        y >= top &&
+        y < top + height;
+}
+
+int t6cBottomHitTest(int x, int y)
+{
+    if (t6cInside(x, y, sx(4),   sy(45),  sx(77), sy(30))) return T6C_TARGET_NAS100;
+    if (t6cInside(x, y, sx(4),   sy(87),  sx(77), sy(30))) return T6C_TARGET_US30;
+    if (t6cInside(x, y, sx(4),   sy(129), sx(77), sy(30))) return T6C_TARGET_GOLD;
+
+    if (t6cInside(x, y, sx(200), sy(45),  sx(52), sy(30))) return T6C_TARGET_15M;
+    if (t6cInside(x, y, sx(200), sy(87),  sx(52), sy(30))) return T6C_TARGET_30M;
+    if (t6cInside(x, y, sx(200), sy(129), sx(52), sy(30))) return T6C_TARGET_1H;
+
+    if (t6cInside(x, y, sx(8),   sy(169), sx(64), sy(18))) return T6C_TARGET_ALERT;
+    if (t6cInside(x, y, sx(96),  sy(169), sx(64), sy(18))) return T6C_TARGET_REFRESH;
+    if (t6cInside(x, y, sx(184), sy(169), sx(64), sy(18))) return T6C_TARGET_START;
+
+    return T6C_TARGET_NONE;
+}
+
 void t6bBottomRender(
     const T6bBottomModel &model
 )
@@ -298,23 +331,55 @@ void t6bBottomRender(
     const u16 background = gray(24);
     const u16 normal = gray(49);
     const u16 selected = gray(99);
+    const u16 pressed = gray(140);
     const u16 white = gray(255);
 
     fillScreen(background);
 
     const u16 nasColor =
-        model.market == 0 ? selected : normal;
+        model.pressedTarget == T6C_TARGET_NAS100
+        ? pressed
+        : (model.market == 0 ? selected : normal);
+
     const u16 us30Color =
-        model.market == 1 ? selected : normal;
+        model.pressedTarget == T6C_TARGET_US30
+        ? pressed
+        : (model.market == 1 ? selected : normal);
+
     const u16 goldColor =
-        model.market == 2 ? selected : normal;
+        model.pressedTarget == T6C_TARGET_GOLD
+        ? pressed
+        : (model.market == 2 ? selected : normal);
 
     const u16 fifteenColor =
-        model.timeframe == 0 ? selected : normal;
+        model.pressedTarget == T6C_TARGET_15M
+        ? pressed
+        : (model.timeframe == 0 ? selected : normal);
+
     const u16 thirtyColor =
-        model.timeframe == 1 ? selected : normal;
+        model.pressedTarget == T6C_TARGET_30M
+        ? pressed
+        : (model.timeframe == 1 ? selected : normal);
+
     const u16 oneHourColor =
-        model.timeframe == 2 ? selected : normal;
+        model.pressedTarget == T6C_TARGET_1H
+        ? pressed
+        : (model.timeframe == 2 ? selected : normal);
+
+    const u16 alertColor =
+        model.pressedTarget == T6C_TARGET_ALERT
+        ? pressed
+        : normal;
+
+    const u16 refreshColor =
+        model.pressedTarget == T6C_TARGET_REFRESH
+        ? pressed
+        : normal;
+
+    const u16 startColor =
+        model.pressedTarget == T6C_TARGET_START
+        ? pressed
+        : normal;
 
     // Original DSi layout scaled 5/4 from 256x192 to 320x240.
     drawText(
@@ -469,7 +534,7 @@ void t6bBottomRender(
     fillRect(
         sx(8), sy(169),
         sx(64), sy(18),
-        normal
+        alertColor
     );
     drawRect(
         sx(8), sy(169),
@@ -486,7 +551,7 @@ void t6bBottomRender(
     fillRect(
         sx(96), sy(169),
         sx(64), sy(18),
-        normal
+        refreshColor
     );
     drawRect(
         sx(96), sy(169),
@@ -503,7 +568,7 @@ void t6bBottomRender(
     fillRect(
         sx(184), sy(169),
         sx(64), sy(18),
-        normal
+        startColor
     );
     drawRect(
         sx(184), sy(169),

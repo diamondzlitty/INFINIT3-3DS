@@ -1170,10 +1170,12 @@ static void zoomChart(AppState &state, int amount)
 
 
 static T6bBottomModel makeBottomUiModel(
-    const AppState &state
+    const AppState &state,
+    int pressedTarget
 )
 {
     T6bBottomModel model = {};
+    model.pressedTarget = pressedTarget;
 
     if (state.selection.instrument == INSTRUMENT_NAS100) {
         model.market = 0;
@@ -1200,12 +1202,29 @@ static T6bBottomModel makeBottomUiModel(
 }
 
 static void renderBottomScreen(
-    const AppState &state
+    const AppState &state,
+    int pressedTarget
 )
 {
     t6bBottomRender(
-        makeBottomUiModel(state)
+        makeBottomUiModel(
+            state,
+            pressedTarget
+        )
     );
+}
+
+static void renderBottomFeedback(
+    const AppState &state,
+    int pressedTarget
+)
+{
+    renderBottomScreen(
+        state,
+        pressedTarget
+    );
+    gfxFlushBuffers();
+    gspWaitForVBlank();
 }
 
 static void renderTopFrame(
@@ -1228,7 +1247,8 @@ static void renderTopFrame(
 }
 
 static void renderFrame(
-    const AppState &state
+    const AppState &state,
+    int pressedTarget
 )
 {
     drawCandleChart(
@@ -1241,7 +1261,10 @@ static void renderFrame(
         state.transitionDirection
     );
 
-    renderBottomScreen(state);
+    renderBottomScreen(
+        state,
+        pressedTarget
+    );
 
     gfxFlushBuffers();
     gfxSwapBuffers();
@@ -1392,6 +1415,30 @@ static void refreshData(
     state.uiPulseFrames = 18;
 }
 
+static void runNotificationAction(
+    AppState &state,
+    bool newsReady
+)
+{
+    Result notificationResult = newsReady
+        ? addNotificationTest()
+        : (Result)-1;
+
+    char detail[40];
+    snprintf(
+        detail,
+        sizeof(detail),
+        "NEWS RESULT 0x%08lX",
+        (unsigned long)notificationResult
+    );
+
+    state.status = R_SUCCEEDED(notificationResult)
+        ? "NOTIFICATION SENT"
+        : "NOTIFICATION FAIL";
+    state.detail = detail;
+    state.uiPulseFrames = 20;
+}
+
 int main(int argc, char *argv[])
 {
     gfxInitDefault();
@@ -1487,28 +1534,258 @@ int main(int argc, char *argv[])
 
     printf("\x1b[2J\x1b[H");
 
-    renderFrame(state);
+    renderFrame(state, T6C_TARGET_NONE);
+
+    int physicalPressedTarget = T6C_TARGET_NONE;
+    int physicalPressedFrames = 0;
+    int lastVisualPressedTarget = T6C_TARGET_NONE;
+    bool requestExit = false;
 
     while (aptMainLoop()) {
         hidScanInput();
+
         u32 down = hidKeysDown();
+        u32 held = hidKeysHeld();
+
         bool needsFrame = down != 0;
         bool bottomDirty = down != 0;
 
+        touchPosition touch = {};
+        int touchTarget = T6C_TARGET_NONE;
+
+        if (held & KEY_TOUCH) {
+            hidTouchRead(&touch);
+            touchTarget = t6cBottomHitTest(
+                touch.px,
+                touch.py
+            );
+        }
+
+        const bool newTouch =
+            (down & KEY_TOUCH) != 0;
+
         if (down & KEY_L) {
             cycleInstrument(state.selection, -1);
-            refreshData(cfg, state, TRANSITION_SELECTION, -1);
+
+            physicalPressedTarget =
+                state.selection.instrument == INSTRUMENT_NAS100
+                ? T6C_TARGET_NAS100
+                : (
+                    state.selection.instrument == INSTRUMENT_US30
+                    ? T6C_TARGET_US30
+                    : T6C_TARGET_GOLD
+                );
+
+            physicalPressedFrames = 6;
+            renderBottomFeedback(
+                state,
+                physicalPressedTarget
+            );
+            refreshData(
+                cfg,
+                state,
+                TRANSITION_SELECTION,
+                -1
+            );
         } else if (down & KEY_R) {
             cycleInstrument(state.selection, 1);
-            refreshData(cfg, state, TRANSITION_SELECTION, 1);
+
+            physicalPressedTarget =
+                state.selection.instrument == INSTRUMENT_NAS100
+                ? T6C_TARGET_NAS100
+                : (
+                    state.selection.instrument == INSTRUMENT_US30
+                    ? T6C_TARGET_US30
+                    : T6C_TARGET_GOLD
+                );
+
+            physicalPressedFrames = 6;
+            renderBottomFeedback(
+                state,
+                physicalPressedTarget
+            );
+            refreshData(
+                cfg,
+                state,
+                TRANSITION_SELECTION,
+                1
+            );
         } else if (down & KEY_ZL) {
             cycleTimeframe(state.selection, -1);
-            refreshData(cfg, state, TRANSITION_SELECTION, -1);
+
+            physicalPressedTarget =
+                state.selection.timeframe == TIMEFRAME_15M
+                ? T6C_TARGET_15M
+                : (
+                    state.selection.timeframe == TIMEFRAME_30M
+                    ? T6C_TARGET_30M
+                    : T6C_TARGET_1H
+                );
+
+            physicalPressedFrames = 6;
+            renderBottomFeedback(
+                state,
+                physicalPressedTarget
+            );
+            refreshData(
+                cfg,
+                state,
+                TRANSITION_SELECTION,
+                -1
+            );
         } else if (down & KEY_ZR) {
             cycleTimeframe(state.selection, 1);
-            refreshData(cfg, state, TRANSITION_SELECTION, 1);
+
+            physicalPressedTarget =
+                state.selection.timeframe == TIMEFRAME_15M
+                ? T6C_TARGET_15M
+                : (
+                    state.selection.timeframe == TIMEFRAME_30M
+                    ? T6C_TARGET_30M
+                    : T6C_TARGET_1H
+                );
+
+            physicalPressedFrames = 6;
+            renderBottomFeedback(
+                state,
+                physicalPressedTarget
+            );
+            refreshData(
+                cfg,
+                state,
+                TRANSITION_SELECTION,
+                1
+            );
         } else if (down & KEY_X) {
-            refreshData(cfg, state, TRANSITION_REFRESH, 0);
+            physicalPressedTarget =
+                T6C_TARGET_REFRESH;
+            physicalPressedFrames = 6;
+
+            renderBottomFeedback(
+                state,
+                physicalPressedTarget
+            );
+            refreshData(
+                cfg,
+                state,
+                TRANSITION_REFRESH,
+                0
+            );
+        }
+
+        if (
+            newTouch &&
+            touchTarget != T6C_TARGET_NONE
+        ) {
+            if (
+                touchTarget == T6C_TARGET_NAS100 ||
+                touchTarget == T6C_TARGET_US30 ||
+                touchTarget == T6C_TARGET_GOLD
+            ) {
+                Instrument nextInstrument =
+                    touchTarget == T6C_TARGET_NAS100
+                    ? INSTRUMENT_NAS100
+                    : (
+                        touchTarget == T6C_TARGET_US30
+                        ? INSTRUMENT_US30
+                        : INSTRUMENT_GOLD
+                    );
+
+                if (
+                    nextInstrument !=
+                    state.selection.instrument
+                ) {
+                    const int oldIndex =
+                        (int)state.selection.instrument;
+                    const int newIndex =
+                        (int)nextInstrument;
+
+                    state.selection.instrument =
+                        nextInstrument;
+
+                    renderBottomFeedback(
+                        state,
+                        touchTarget
+                    );
+
+                    refreshData(
+                        cfg,
+                        state,
+                        TRANSITION_SELECTION,
+                        newIndex >= oldIndex ? 1 : -1
+                    );
+                }
+            } else if (
+                touchTarget == T6C_TARGET_15M ||
+                touchTarget == T6C_TARGET_30M ||
+                touchTarget == T6C_TARGET_1H
+            ) {
+                Timeframe nextTimeframe =
+                    touchTarget == T6C_TARGET_15M
+                    ? TIMEFRAME_15M
+                    : (
+                        touchTarget == T6C_TARGET_30M
+                        ? TIMEFRAME_30M
+                        : TIMEFRAME_1H
+                    );
+
+                if (
+                    nextTimeframe !=
+                    state.selection.timeframe
+                ) {
+                    const int oldIndex =
+                        (int)state.selection.timeframe;
+                    const int newIndex =
+                        (int)nextTimeframe;
+
+                    state.selection.timeframe =
+                        nextTimeframe;
+
+                    renderBottomFeedback(
+                        state,
+                        touchTarget
+                    );
+
+                    refreshData(
+                        cfg,
+                        state,
+                        TRANSITION_SELECTION,
+                        newIndex >= oldIndex ? 1 : -1
+                    );
+                }
+            } else if (
+                touchTarget == T6C_TARGET_ALERT
+            ) {
+                renderBottomFeedback(
+                    state,
+                    touchTarget
+                );
+                runNotificationAction(
+                    state,
+                    newsReady
+                );
+            } else if (
+                touchTarget == T6C_TARGET_REFRESH
+            ) {
+                renderBottomFeedback(
+                    state,
+                    touchTarget
+                );
+                refreshData(
+                    cfg,
+                    state,
+                    TRANSITION_REFRESH,
+                    0
+                );
+            } else if (
+                touchTarget == T6C_TARGET_START
+            ) {
+                renderBottomFeedback(
+                    state,
+                    touchTarget
+                );
+                requestExit = true;
+            }
         }
 
         if (down & KEY_DLEFT) moveCursor(state, -1);
@@ -1523,6 +1800,7 @@ int main(int argc, char *argv[])
 
         if (state.inputRepeatCooldown <= 0) {
             bool repeated = false;
+
             if (circle.dx < -70) {
                 moveCursor(state, -4);
                 repeated = true;
@@ -1551,25 +1829,63 @@ int main(int argc, char *argv[])
         }
 
         if (down & KEY_Y) {
-            Result notificationResult = newsReady
-                ? addNotificationTest()
-                : (Result)-1;
-            char detail[40];
-            snprintf(
-                detail,
-                sizeof(detail),
-                "NEWS RESULT 0x%08lX",
-                (unsigned long)notificationResult
+            physicalPressedTarget =
+                T6C_TARGET_ALERT;
+            physicalPressedFrames = 6;
+
+            renderBottomFeedback(
+                state,
+                physicalPressedTarget
             );
-            state.status = R_SUCCEEDED(notificationResult)
-                ? "NOTIFICATION SENT"
-                : "NOTIFICATION FAIL";
-            state.detail = detail;
-            state.uiPulseFrames = 20;
+
+            runNotificationAction(
+                state,
+                newsReady
+            );
+
+            bottomDirty = true;
+        }
+
+        if (down & KEY_START) {
+            physicalPressedTarget =
+                T6C_TARGET_START;
+            physicalPressedFrames = 6;
+
+            renderBottomFeedback(
+                state,
+                physicalPressedTarget
+            );
+
+            requestExit = true;
+            bottomDirty = true;
+        }
+
+        int visualPressedTarget =
+            touchTarget;
+
+        if (
+            visualPressedTarget == T6C_TARGET_NONE &&
+            physicalPressedFrames > 0
+        ) {
+            visualPressedTarget =
+                physicalPressedTarget;
+        }
+
+        if (
+            visualPressedTarget !=
+            lastVisualPressedTarget
+        ) {
+            bottomDirty = true;
         }
 
         if (bottomDirty) {
-            renderFrame(state);
+            renderFrame(
+                state,
+                visualPressedTarget
+            );
+
+            lastVisualPressedTarget =
+                visualPressedTarget;
         } else if (
             needsFrame ||
             state.transition != TRANSITION_NONE
@@ -1578,9 +1894,14 @@ int main(int argc, char *argv[])
         } else {
             gspWaitForVBlank();
         }
+
         advanceAnimations(state);
 
-        if (down & KEY_START) {
+        if (physicalPressedFrames > 0) {
+            physicalPressedFrames--;
+        }
+
+        if (requestExit) {
             break;
         }
     }
