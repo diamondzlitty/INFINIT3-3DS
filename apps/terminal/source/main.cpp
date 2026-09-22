@@ -1,5 +1,6 @@
 #include <3ds.h>
 #include "bottom_ui.hpp"
+#include "session_levels.hpp"
 #include <3ds/services/news.h>
 
 #include <arpa/inet.h>
@@ -1069,9 +1070,11 @@ struct AppState {
     std::vector<Candle> previousCandles;
     MarketData market;
     MacroData macro;
+    SessionLevelsData levels;
     bool candleReady;
     bool marketReady;
     bool macroReady;
+    bool levelsReady;
     bool newsReady;
     ChartTransition transition;
     int transitionFrame;
@@ -1196,6 +1199,7 @@ static T6bBottomModel makeBottomUiModel(
     model.dataConnected = state.marketReady;
     model.candleConnected = state.candleReady;
     model.macroConnected = state.macroReady;
+    model.levelsConnected = state.levelsReady;
     model.newsReady = state.newsReady;
 
     model.syncActive = state.status == "SYNC";
@@ -1203,7 +1207,8 @@ static T6bBottomModel makeBottomUiModel(
         state.status.find("DEGRADED") != std::string::npos ||
         !state.candleReady ||
         !state.marketReady ||
-        !state.macroReady;
+        !state.macroReady ||
+        !state.levelsReady;
 
     model.candleCount = (int)state.candles.size();
     model.cursorPosition =
@@ -1223,6 +1228,8 @@ static T6bBottomModel makeBottomUiModel(
         model.faultSource = 2;
     } else if (state.detail.rfind("MACRO:", 0) == 0) {
         model.faultSource = 3;
+    } else if (state.detail.rfind("LEVELS:", 0) == 0) {
+        model.faultSource = 4;
     }
 
     model.nas100 = state.market.nas100;
@@ -1346,7 +1353,7 @@ static void showLoading(
 {
     state.status = "SYNC";
     state.detail =
-        "FETCHING MARKET + MACRO + OHLC";
+        "FETCHING MARKET + MACRO + OHLC + LEVELS";
     state.uiPulseFrames = 0;
 }
 
@@ -1380,9 +1387,11 @@ static void refreshData(
     std::string candleError;
     std::string marketError;
     std::string macroError;
+    std::string levelsError;
     std::vector<Candle> newCandles;
     MarketData newMarket = {};
     MacroData newMacro = {};
+    SessionLevelsData newLevels = {};
 
     bool candleOk =
         httpGetCandles(cfg, state.selection, candleBody, candleError) &&
@@ -1395,6 +1404,13 @@ static void refreshData(
     bool macroOk =
         httpGetMacro(cfg, macroBody, macroError) &&
         parseMacroData(macroBody, newMacro, macroError);
+
+    bool levelsOk = fetchSessionLevels(
+        cfg.host,
+        cfg.port,
+        newLevels,
+        levelsError
+    );
 
     if (candleOk) {
         state.previousCandles = state.candles;
@@ -1446,28 +1462,35 @@ static void refreshData(
         state.macroReady = true;
     }
 
+    if (levelsOk) {
+        state.levels = newLevels;
+        state.levelsReady = true;
+    }
+
     // Only a real Big-3 price change drives the FRESH pulse.
     if (marketChanged) {
         state.marketPulseFrames = 24;
     }
 
-    if (candleOk && marketOk && macroOk) {
+    if (candleOk && marketOk && macroOk && levelsOk) {
         state.status = "ONLINE // SYNC OK";
         char detail[40];
         snprintf(
             detail,
             sizeof(detail),
-            "%s %s // %lu CANDLES",
+            "%s %s // %lu // %s",
             instrumentName(state.selection.instrument),
             timeframeName(state.selection.timeframe),
-            (unsigned long)state.candles.size()
+            (unsigned long)state.candles.size(),
+            state.levels.session.c_str()
         );
         state.detail = detail;
     } else {
         state.status = "DEGRADED // HELD";
         if (!candleOk) state.detail = "CANDLE: " + candleError;
         else if (!marketOk) state.detail = "MARKET: " + marketError;
-        else state.detail = "MACRO: " + macroError;
+        else if (!macroOk) state.detail = "MACRO: " + macroError;
+        else state.detail = "LEVELS: " + levelsError;
     }
     state.uiPulseFrames = 18;
 }

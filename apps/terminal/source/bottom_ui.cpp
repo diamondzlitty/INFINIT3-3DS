@@ -469,18 +469,21 @@ void t6bBottomRender(
         faultLabel = " MKT";
     } else if (model.faultSource == 3) {
         faultLabel = " MAC";
+    } else if (model.faultSource == 4) {
+        faultLabel = " LVL";
     }
 
     char statusLine[80];
     snprintf(
         statusLine,
         sizeof(statusLine),
-        "%s%s CND%d MKT%d MAC%d NWS%d %s C%d-%d",
+        "%s%s CND%d MKT%d MAC%d LVL%d NWS%d %s C%d-%d",
         stateLabel,
         faultLabel,
         model.candleConnected ? 1 : 0,
         model.dataConnected ? 1 : 0,
         model.macroConnected ? 1 : 0,
+        model.levelsConnected ? 1 : 0,
         model.newsReady ? 1 : 0,
         cursorLabel,
         model.cursorPosition,

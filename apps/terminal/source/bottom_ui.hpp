@@ -23,6 +23,7 @@ struct T6bBottomModel {
     bool dataConnected;
     bool candleConnected;
     bool macroConnected;
+    bool levelsConnected;
     bool newsReady;
     bool selectedCandleValid;
     bool syncActive;
