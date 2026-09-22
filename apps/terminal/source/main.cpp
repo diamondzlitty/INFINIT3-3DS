@@ -468,6 +468,515 @@ static Candle interpolateCandle(
     return result;
 }
 
+struct ChartOverlayLevels {
+    bool enabled;
+    bool previousDayReady;
+    bool sessionReady;
+
+    double previousHigh;
+    double previousLow;
+    double previousClose;
+
+    double sessionHigh;
+    double sessionLow;
+};
+
+static void includeChartPrice(
+    double price,
+    double &minPrice,
+    double &maxPrice
+)
+{
+    if (price < minPrice) {
+        minPrice = price;
+    }
+
+    if (price > maxPrice) {
+        maxPrice = price;
+    }
+}
+
+static void calculateChartPriceRange(
+    const std::vector<Candle> &candles,
+    int start,
+    int count,
+    const ChartOverlayLevels *overlay,
+    double &minPrice,
+    double &maxPrice
+)
+{
+    minPrice = candles[start].low;
+    maxPrice = candles[start].high;
+
+    for (
+        int i = start;
+        i < start + count;
+        i++
+    ) {
+        includeChartPrice(
+            candles[i].low,
+            minPrice,
+            maxPrice
+        );
+
+        includeChartPrice(
+            candles[i].high,
+            minPrice,
+            maxPrice
+        );
+    }
+
+    if (
+        overlay != NULL &&
+        overlay->enabled
+    ) {
+        if (overlay->previousDayReady) {
+            includeChartPrice(
+                overlay->previousHigh,
+                minPrice,
+                maxPrice
+            );
+
+            includeChartPrice(
+                overlay->previousLow,
+                minPrice,
+                maxPrice
+            );
+
+            includeChartPrice(
+                overlay->previousClose,
+                minPrice,
+                maxPrice
+            );
+        }
+
+        if (overlay->sessionReady) {
+            includeChartPrice(
+                overlay->sessionHigh,
+                minPrice,
+                maxPrice
+            );
+
+            includeChartPrice(
+                overlay->sessionLow,
+                minPrice,
+                maxPrice
+            );
+        }
+    }
+
+    double range =
+        maxPrice - minPrice;
+
+    if (range < 0.01) {
+        range = 1.0;
+    }
+
+    minPrice -= range * 0.05;
+    maxPrice += range * 0.05;
+}
+
+static u8 tinyTopGlyphRow(
+    char ch,
+    int row
+)
+{
+    if (row < 0 || row >= 5) {
+        return 0;
+    }
+
+    switch (ch) {
+        case 'P': {
+            static const u8 g[5] = {
+                6, 5, 6, 4, 4
+            };
+            return g[row];
+        }
+
+        case 'R': {
+            static const u8 g[5] = {
+                6, 5, 6, 5, 5
+            };
+            return g[row];
+        }
+
+        case 'E': {
+            static const u8 g[5] = {
+                7, 4, 6, 4, 7
+            };
+            return g[row];
+        }
+
+        case 'V': {
+            static const u8 g[5] = {
+                5, 5, 5, 5, 2
+            };
+            return g[row];
+        }
+
+        case 'H': {
+            static const u8 g[5] = {
+                5, 5, 7, 5, 5
+            };
+            return g[row];
+        }
+
+        case 'I': {
+            static const u8 g[5] = {
+                7, 2, 2, 2, 7
+            };
+            return g[row];
+        }
+
+        case 'G': {
+            static const u8 g[5] = {
+                7, 4, 5, 5, 7
+            };
+            return g[row];
+        }
+
+        case 'L': {
+            static const u8 g[5] = {
+                4, 4, 4, 4, 7
+            };
+            return g[row];
+        }
+
+        case 'O': {
+            static const u8 g[5] = {
+                7, 5, 5, 5, 7
+            };
+            return g[row];
+        }
+
+        case 'W': {
+            static const u8 g[5] = {
+                5, 5, 5, 7, 5
+            };
+            return g[row];
+        }
+
+        case 'C': {
+            static const u8 g[5] = {
+                7, 4, 4, 4, 7
+            };
+            return g[row];
+        }
+
+        case 'S': {
+            static const u8 g[5] = {
+                7, 4, 7, 1, 7
+            };
+            return g[row];
+        }
+
+        case ' ': {
+            return 0;
+        }
+
+        default:
+            return 0;
+    }
+}
+
+static int tinyTopTextWidth(
+    const char *text
+)
+{
+    if (
+        text == NULL ||
+        text[0] == '\0'
+    ) {
+        return 0;
+    }
+
+    return (int)strlen(text) * 4 - 1;
+}
+
+static void drawTinyTopText(
+    int x,
+    int y,
+    const char *text,
+    u8 shade
+)
+{
+    if (text == NULL) {
+        return;
+    }
+
+    for (
+        int i = 0;
+        text[i] != '\0';
+        i++
+    ) {
+        for (int row = 0; row < 5; row++) {
+            u8 bits =
+                tinyTopGlyphRow(
+                    text[i],
+                    row
+                );
+
+            for (
+                int col = 0;
+                col < 3;
+                col++
+            ) {
+                if (
+                    bits &
+                    (1 << (2 - col))
+                ) {
+                    putTopPixel(
+                        x + i * 4 + col,
+                        y + row,
+                        shade
+                    );
+                }
+            }
+        }
+    }
+}
+
+static void drawPatternedTopLine(
+    int x0,
+    int x1,
+    int y,
+    u8 shade,
+    int dash,
+    int gap
+)
+{
+    if (dash < 1) dash = 1;
+    if (gap < 0) gap = 0;
+
+    const int period =
+        dash + gap;
+
+    for (
+        int x = x0;
+        x <= x1;
+        x++
+    ) {
+        if (
+            period <= 1 ||
+            ((x - x0) % period) < dash
+        ) {
+            putTopPixel(
+                x,
+                y,
+                shade
+            );
+        }
+    }
+}
+
+static void drawChartLevelLine(
+    int left,
+    int right,
+    int top,
+    int bottom,
+    int y,
+    const char *label,
+    u8 shade,
+    int dash,
+    int gap
+)
+{
+    int labelY = y - 2;
+
+    if (labelY < top + 1) {
+        labelY = top + 1;
+    }
+
+    if (labelY > bottom - 5) {
+        labelY = bottom - 5;
+    }
+
+    const int labelWidth =
+        tinyTopTextWidth(label);
+
+    const int labelX =
+        right - labelWidth - 3;
+
+    drawPatternedTopLine(
+        left + 2,
+        labelX - 4,
+        y,
+        shade,
+        dash,
+        gap
+    );
+
+    fillTopRect(
+        labelX - 2,
+        labelY - 1,
+        labelWidth + 4,
+        7,
+        0
+    );
+
+    drawTinyTopText(
+        labelX,
+        labelY,
+        label,
+        shade
+    );
+}
+
+static void drawChartLevelOverlays(
+    const std::vector<Candle> &candles,
+    int start,
+    int count,
+    const ChartOverlayLevels *overlay
+)
+{
+    if (
+        overlay == NULL ||
+        !overlay->enabled ||
+        candles.empty() ||
+        count <= 0
+    ) {
+        return;
+    }
+
+    if (start < 0) {
+        start = 0;
+    }
+
+    if (
+        start + count >
+        (int)candles.size()
+    ) {
+        count =
+            (int)candles.size() -
+            start;
+    }
+
+    if (count <= 0) {
+        return;
+    }
+
+    const int left = 8;
+    const int right = 391;
+    const int top = 8;
+    const int bottom = 231;
+
+    double minPrice = 0.0;
+    double maxPrice = 0.0;
+
+    calculateChartPriceRange(
+        candles,
+        start,
+        count,
+        overlay,
+        minPrice,
+        maxPrice
+    );
+
+    if (overlay->previousDayReady) {
+        int y = priceToChartY(
+            overlay->previousHigh,
+            minPrice,
+            maxPrice,
+            top + 3,
+            bottom - 3
+        );
+
+        drawChartLevelLine(
+            left,
+            right,
+            top,
+            bottom,
+            y,
+            "PREV HIGH",
+            155,
+            5,
+            3
+        );
+
+        y = priceToChartY(
+            overlay->previousLow,
+            minPrice,
+            maxPrice,
+            top + 3,
+            bottom - 3
+        );
+
+        drawChartLevelLine(
+            left,
+            right,
+            top,
+            bottom,
+            y,
+            "PREV LOW",
+            155,
+            5,
+            3
+        );
+
+        y = priceToChartY(
+            overlay->previousClose,
+            minPrice,
+            maxPrice,
+            top + 3,
+            bottom - 3
+        );
+
+        drawChartLevelLine(
+            left,
+            right,
+            top,
+            bottom,
+            y,
+            "PREV CLOSE",
+            110,
+            2,
+            3
+        );
+    }
+
+    if (overlay->sessionReady) {
+        int y = priceToChartY(
+            overlay->sessionHigh,
+            minPrice,
+            maxPrice,
+            top + 3,
+            bottom - 3
+        );
+
+        drawChartLevelLine(
+            left,
+            right,
+            top,
+            bottom,
+            y,
+            "SESS HIGH",
+            225,
+            10,
+            2
+        );
+
+        y = priceToChartY(
+            overlay->sessionLow,
+            minPrice,
+            maxPrice,
+            top + 3,
+            bottom - 3
+        );
+
+        drawChartLevelLine(
+            left,
+            right,
+            top,
+            bottom,
+            y,
+            "SESS LOW",
+            225,
+            10,
+            2
+        );
+    }
+}
+
 static void drawCandleSeries(
     const std::vector<Candle> &candles,
     int start,
@@ -477,7 +986,8 @@ static void drawCandleSeries(
     int xOffset,
     float shadeScale,
     const Candle *latestFrom,
-    float latestAmount
+    float latestAmount,
+    const ChartOverlayLevels *overlay
 )
 {
     if (candles.empty() || count <= 0 || shadeScale < 0.03f) {
@@ -494,18 +1004,17 @@ static void drawCandleSeries(
         count = (int)candles.size() - start;
     }
 
-    double minPrice = candles[start].low;
-    double maxPrice = candles[start].high;
+    double minPrice = 0.0;
+    double maxPrice = 0.0;
 
-    for (int i = start; i < start + count; i++) {
-        if (candles[i].low < minPrice) minPrice = candles[i].low;
-        if (candles[i].high > maxPrice) maxPrice = candles[i].high;
-    }
-
-    double range = maxPrice - minPrice;
-    if (range < 0.01) range = 1.0;
-    minPrice -= range * 0.05;
-    maxPrice += range * 0.05;
+    calculateChartPriceRange(
+        candles,
+        start,
+        count,
+        overlay,
+        minPrice,
+        maxPrice
+    );
 
     const int chartWidth = right - left - 8;
     const double step = (double)chartWidth / (double)count;
@@ -600,7 +1109,8 @@ static void drawCandleChart(
     ChartTransition transition,
     int animationFrame,
     int animationLength,
-    int transitionDirection
+    int transitionDirection,
+    const ChartOverlayLevels *overlay
 )
 {
     clearTopScreen(0);
@@ -650,7 +1160,8 @@ static void drawCandleChart(
             (int)(-direction * amount * 28.0f),
             1.0f - amount,
             NULL,
-            1.0f
+            1.0f,
+            NULL
         );
 
         drawCandleSeries(
@@ -662,8 +1173,17 @@ static void drawCandleChart(
             (int)(direction * (1.0f - amount) * 28.0f),
             amount,
             NULL,
-            1.0f
+            1.0f,
+            overlay
         );
+
+        drawChartLevelOverlays(
+            candles,
+            start,
+            count,
+            overlay
+        );
+
         return;
     }
 
@@ -681,7 +1201,15 @@ static void drawCandleChart(
         0,
         1.0f,
         latestFrom,
-        amount
+        amount,
+        overlay
+    );
+
+    drawChartLevelOverlays(
+        candles,
+        start,
+        count,
+        overlay
     );
 }
 
@@ -1382,10 +1910,77 @@ static void renderBottomFeedback(
     gspWaitForVBlank();
 }
 
+static ChartOverlayLevels makeChartOverlayLevels(
+    const AppState &state
+)
+{
+    ChartOverlayLevels overlay = {};
+
+    // SELECT/LEVELS page controls whether chart overlays
+    // are shown. MARKET page remains visually clean.
+    overlay.enabled =
+        state.levelsPage &&
+        state.levelsReady;
+
+    if (!overlay.enabled) {
+        return overlay;
+    }
+
+    const SessionInstrumentLevels *levels = NULL;
+
+    if (
+        state.selection.instrument ==
+        INSTRUMENT_NAS100
+    ) {
+        levels = &state.levels.nas100;
+    } else if (
+        state.selection.instrument ==
+        INSTRUMENT_US30
+    ) {
+        levels = &state.levels.us30;
+    } else {
+        levels = &state.levels.gold;
+    }
+
+    if (
+        levels == NULL ||
+        !levels->ready
+    ) {
+        overlay.enabled = false;
+        return overlay;
+    }
+
+    overlay.previousDayReady = true;
+
+    overlay.previousHigh =
+        levels->pdh;
+
+    overlay.previousLow =
+        levels->pdl;
+
+    overlay.previousClose =
+        levels->pdc;
+
+    if (levels->sessionRangeValid) {
+        overlay.sessionReady = true;
+
+        overlay.sessionHigh =
+            levels->sessionHigh;
+
+        overlay.sessionLow =
+            levels->sessionLow;
+    }
+
+    return overlay;
+}
+
 static void renderTopFrame(
     const AppState &state
 )
 {
+    ChartOverlayLevels overlay =
+        makeChartOverlayLevels(state);
+
     drawCandleChart(
         state.candles,
         state.previousCandles,
@@ -1393,7 +1988,8 @@ static void renderTopFrame(
         state.transition,
         state.transitionFrame,
         state.transitionLength,
-        state.transitionDirection
+        state.transitionDirection,
+        &overlay
     );
 
     gfxFlushBuffers();
@@ -1406,6 +2002,9 @@ static void renderFrame(
     int pressedTarget
 )
 {
+    ChartOverlayLevels overlay =
+        makeChartOverlayLevels(state);
+
     drawCandleChart(
         state.candles,
         state.previousCandles,
@@ -1413,7 +2012,8 @@ static void renderFrame(
         state.transition,
         state.transitionFrame,
         state.transitionLength,
-        state.transitionDirection
+        state.transitionDirection,
+        &overlay
     );
 
     renderBottomScreen(
