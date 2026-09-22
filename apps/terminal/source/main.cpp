@@ -1086,6 +1086,7 @@ struct AppState {
     int nasDirection;
     int us30Direction;
     int goldDirection;
+    bool levelsPage;
     std::string status;
     std::string detail;
 };
@@ -1182,6 +1183,7 @@ static T6bBottomModel makeBottomUiModel(
 {
     T6bBottomModel model = {};
     model.pressedTarget = pressedTarget;
+    model.levelsPage = state.levelsPage;
 
     if (state.selection.instrument == INSTRUMENT_NAS100) {
         model.market = 0;
@@ -1266,6 +1268,90 @@ static T6bBottomModel makeBottomUiModel(
     model.wti = state.macro.wti;
     model.vix = state.macro.vix;
     model.curve2s10s = state.macro.curve2s10s;
+
+    model.sessionName =
+        state.levelsReady
+        ? state.levels.session.c_str()
+        : "----";
+
+    model.sessionProgress =
+        state.levelsReady
+        ? state.levels.sessionProgress
+        : 0;
+
+    const SessionInstrumentLevels *instrumentLevels = NULL;
+
+    if (state.levelsReady) {
+        if (
+            state.selection.instrument ==
+            INSTRUMENT_NAS100
+        ) {
+            instrumentLevels =
+                &state.levels.nas100;
+        } else if (
+            state.selection.instrument ==
+            INSTRUMENT_US30
+        ) {
+            instrumentLevels =
+                &state.levels.us30;
+        } else {
+            instrumentLevels =
+                &state.levels.gold;
+        }
+    }
+
+    if (
+        instrumentLevels != NULL &&
+        instrumentLevels->ready
+    ) {
+        model.levelInstrumentReady = true;
+
+        model.pdh = instrumentLevels->pdh;
+        model.pdl = instrumentLevels->pdl;
+        model.pdc = instrumentLevels->pdc;
+
+        model.dayOpen =
+            instrumentLevels->dayOpen;
+
+        model.dayHigh =
+            instrumentLevels->dayHigh;
+
+        model.dayLow =
+            instrumentLevels->dayLow;
+
+        const SessionTriplet *activeSession = NULL;
+
+        if (state.levels.session == "ASIA") {
+            activeSession =
+                &instrumentLevels->asia;
+        } else if (
+            state.levels.session == "LONDON"
+        ) {
+            activeSession =
+                &instrumentLevels->london;
+        } else if (
+            state.levels.session == "NEW_YORK"
+        ) {
+            activeSession =
+                &instrumentLevels->newYork;
+        }
+
+        if (
+            activeSession != NULL &&
+            activeSession->valid
+        ) {
+            model.activeSessionValid = true;
+
+            model.sessionOpen =
+                activeSession->open;
+
+            model.sessionHigh =
+                activeSession->high;
+
+            model.sessionLow =
+                activeSession->low;
+        }
+    }
 
     return model;
 }
@@ -2068,6 +2154,20 @@ int main(int argc, char *argv[])
 
         const bool newTouch =
             (down & KEY_TOUCH) != 0;
+
+        if (down & KEY_SELECT) {
+            state.levelsPage =
+                !state.levelsPage;
+
+            state.detail =
+                state.levelsPage
+                ? "CENTER PANEL: LEVELS"
+                : "CENTER PANEL: MARKET";
+
+            state.uiPulseFrames = 6;
+            needsFrame = true;
+            bottomDirty = true;
+        }
 
         if (down & KEY_L) {
             cycleInstrument(state.selection, -1);

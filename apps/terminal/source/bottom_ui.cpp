@@ -677,6 +677,142 @@ void t6bBottomRender(
         white
     );
 
+    if (model.levelsPage) {
+        char metric[40];
+        char sessionText[40];
+
+        drawText(
+            sx(113), sy(42),
+            "LEVELS",
+            1,
+            secondary
+        );
+
+        snprintf(
+            sessionText,
+            sizeof(sessionText),
+            "%s %d%%",
+            model.sessionName != NULL
+                ? model.sessionName
+                : "----",
+            model.sessionProgress
+        );
+
+        drawText(
+            sx(90), sy(51),
+            sessionText,
+            1,
+            white
+        );
+
+        formatLabeledMetric(
+            metric,
+            sizeof(metric),
+            "PDH",
+            model.levelInstrumentReady,
+            model.pdh
+        );
+        drawText(
+            sx(90), sy(63),
+            metric, 1, white
+        );
+
+        formatLabeledMetric(
+            metric,
+            sizeof(metric),
+            "PDL",
+            model.levelInstrumentReady,
+            model.pdl
+        );
+        drawText(
+            sx(90), sy(75),
+            metric, 1, white
+        );
+
+        formatLabeledMetric(
+            metric,
+            sizeof(metric),
+            "PDC",
+            model.levelInstrumentReady,
+            model.pdc
+        );
+        drawText(
+            sx(90), sy(87),
+            metric, 1, white
+        );
+
+        formatLabeledMetric(
+            metric,
+            sizeof(metric),
+            "DO",
+            model.levelInstrumentReady,
+            model.dayOpen
+        );
+        drawText(
+            sx(90), sy(99),
+            metric, 1, white
+        );
+
+        formatLabeledMetric(
+            metric,
+            sizeof(metric),
+            "DH",
+            model.levelInstrumentReady,
+            model.dayHigh
+        );
+        drawText(
+            sx(90), sy(111),
+            metric, 1, white
+        );
+
+        formatLabeledMetric(
+            metric,
+            sizeof(metric),
+            "DL",
+            model.levelInstrumentReady,
+            model.dayLow
+        );
+        drawText(
+            sx(90), sy(123),
+            metric, 1, white
+        );
+
+        formatLabeledMetric(
+            metric,
+            sizeof(metric),
+            "SO",
+            model.activeSessionValid,
+            model.sessionOpen
+        );
+        drawText(
+            sx(90), sy(135),
+            metric, 1, white
+        );
+
+        formatLabeledMetric(
+            metric,
+            sizeof(metric),
+            "SH",
+            model.activeSessionValid,
+            model.sessionHigh
+        );
+        drawText(
+            sx(90), sy(147),
+            metric, 1, white
+        );
+
+        formatLabeledMetric(
+            metric,
+            sizeof(metric),
+            "SL",
+            model.activeSessionValid,
+            model.sessionLow
+        );
+        drawText(
+            sx(90), sy(159),
+            metric, 1, white
+        );
+    } else {
     // Selected-candle OHLC occupies the upper center column.
     drawText(
         sx(121), sy(42),
@@ -784,6 +920,8 @@ void t6bBottomRender(
         model.curve2s10s
     );
     drawText(sx(143), sy(152), metric, 1, white);
+
+    }
 
     // Bottom action row remains exactly where T6C touch expects it.
     fillRect(

@@ -29,6 +29,9 @@ struct T6bBottomModel {
     bool syncActive;
     bool degraded;
     bool cursorLatest;
+    bool levelsPage;
+    bool levelInstrumentReady;
+    bool activeSessionValid;
 
     int cursorPosition;
     int candleCount;
@@ -37,6 +40,8 @@ struct T6bBottomModel {
     int nasDirection;
     int us30Direction;
     int goldDirection;
+    int sessionProgress;
+    const char *sessionName;
 
     double nas100;
     double us30;
@@ -53,6 +58,18 @@ struct T6bBottomModel {
     double wti;
     double vix;
     double curve2s10s;
+
+    double pdh;
+    double pdl;
+    double pdc;
+
+    double dayOpen;
+    double dayHigh;
+    double dayLow;
+
+    double sessionOpen;
+    double sessionHigh;
+    double sessionLow;
 };
 
 bool t6aBottomInit();
